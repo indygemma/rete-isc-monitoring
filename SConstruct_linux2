@@ -1,0 +1,48 @@
+import sys, os
+from distutils import sysconfig
+
+env = Environment()
+
+defines = [
+
+]
+
+include_dirs = [
+]
+
+library_dirs = [
+]
+
+libraries = [
+]
+
+link_flags = [
+    "-g",
+    "-Wall",
+    "-Weffc++",
+    "-Wextra",
+    "-rdynamic" # this is required for exporting functions for luajit bindings
+]
+
+cxx_flags = [
+    "-std=c++11",
+    "-g"
+]
+
+src= [
+  "rete.cc"
+]
+
+dll_src = [
+]
+
+env["CPPDEFINES"] = defines
+env["LIBS"]       = libraries
+env["LIBPATH"]    = ":".join(library_dirs)
+env["CPPPATH"]    = include_dirs
+env["LINKFLAGS"]  = link_flags
+env["CXXFLAGS"]   = cxx_flags
+
+env.Program("bin/linux/rete", src + ["main.cc"], srcdir="src")
+env.Program("bin/linux/unittests", src + ["unittests.cc"], srcdir="src")
+#env.SharedLibrary("bin/linux/engine.so", dll_src, srcdir="src")
