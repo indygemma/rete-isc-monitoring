@@ -23,6 +23,9 @@ TEST_CASE( "Adding two seperate conditions to alpha memory" ) {/* {{{*/
 void r1_handler(rete::rete_t* rs) {/* {{{*/
     printf("hello handler\n");
 }/* }}}*/
+TEST_CASE( "Check conditions are properly categorized" ) {/* {{{*/
+
+}/* }}}*/
 TEST_CASE( "Add a single rule" ) {/* {{{*/
     rete::rule_t r1;
     r1.name = "simple rule";
