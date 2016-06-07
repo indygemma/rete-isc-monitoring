@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <unordered_map>
+#include <vector>
 
 namespace rete {
 
@@ -353,8 +354,11 @@ namespace rete {
     };
 
     struct alpha_node_t {
-        condition_t* conditions;
+        std::vector<condition_t> conditions;
     };
+
+    alpha_node_t* alpha_node_t_init();
+    void alpha_node_t_destroy(alpha_node_t*);
 
     typedef std::unordered_map<rete::condition_t, alpha_node_t*, rete::condition_t_hasher> alpha_network_type;
 
@@ -366,6 +370,9 @@ namespace rete {
 
         alpha_network_type alpha_network;
     };
+
+    rete_t* rete_t_init();
+    void rete_t_destroy(rete_t*);
 
     typedef void (*rule_action)(rete_t* state);
 

@@ -105,6 +105,16 @@ namespace rete {
             return "M" + std::to_string(val.n);
     }
 
+    alpha_node_t* alpha_node_t_init()
+    {
+        return new alpha_node_t();
+    }
+
+    void alpha_node_t_destroy(alpha_node_t* x)
+    {
+        delete x;
+    }
+
     alpha_node_t* lookup_alpha_memory_for_condition(rete_t* rs, condition_t& condition)
     {
         alpha_network_type::const_iterator it = rs->alpha_network.find(condition);
@@ -117,15 +127,23 @@ namespace rete {
 
     void add_condition(rete_t* rs, condition_t& condition)
     {
+        printf("1%s...%d\n", condition.as_key().c_str(), rs->alpha_memory_count);
         // lookup constants: id, attr, value
         alpha_node_t* maybe_am = lookup_alpha_memory_for_condition(rs, condition);
         if (!maybe_am) {
-            // TODO: add a new alpha memory
-            // alpha_node_t* new_am  = alloc
-            // new_am.conditions = append condition : new_am.conditions
+            printf("2\n");
+            alpha_node_t* new_am  = alpha_node_t_init();
+            printf("3\n");
+            new_am->conditions.push_back(condition);
+            printf("4\n");
+            rs->alpha_network[condition] = new_am;
+            printf("5\n");
             rs->alpha_memory_count++;
+            printf("6\n");
         } else {
-            // maybe_am.conditions = append condition : maybe_am.conditions
+            // TODO: make sure the condition is unique
+            //maybe_am.conditions = append condition : maybe_am.conditions
+            printf("7\n");
         }
     }
 
@@ -135,8 +153,18 @@ namespace rete {
         printf("length: %d\n", rule.conditions_size);
         for (unsigned int i=0;i<rule.conditions_size;i++) {
             printf("i: %d\n", i);
-            add_condition(rs, rule.conditions[0]);
+            add_condition(rs, rule.conditions[i]);
         }
+    }
+
+    rete_t* rete_t_init()
+    {
+        return new rete_t();
+    }
+
+    void rete_t_destroy(rete_t* rs)
+    {
+        delete rs;
     }
 
 }
