@@ -27,9 +27,6 @@ TEST_CASE( "Adding two seperate conditions to alpha memory" ) {/* {{{*/
 void r1_handler(rete::rete_t* rs) {/* {{{*/
     printf("hello handler\n");
 }/* }}}*/
-TEST_CASE( "Check conditions are properly categorized" ) {/* {{{*/
-
-}/* }}}*/
 TEST_CASE( "Add a single rule" ) {/* {{{*/
     rete::rule_t r1;
     r1.name = "simple rule";
@@ -56,11 +53,52 @@ TEST_CASE( "Add a single rule" ) {/* {{{*/
     // each alpha memory node has an associated join node
     REQUIRE( (rs1->join_nodes_count == 2) );
     // each join node is associated with a beta memory node
+    // (in thise case 1 root beta node + children)
     REQUIRE( (rs1->beta_memory_count == 2) );
     // this 1 production node represents the rule
     REQUIRE( (rs1->production_nodes_count == 1) );
 
     rete::rete_t_destroy(rs1);
 
-    free(r1.conditions);
+    //free(r1.conditions);
+}/* }}}*/
+TEST_CASE( "Add multiple rules" ) {/* {{{*/
+    rete::rule_t r1;
+    r1.name = "sample rule";
+    r1.salience = 0;
+
+    rete::condition_t r1_conditions[2] = {
+        rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
+        rete::condition_t(rete::var("x"), rete::attr("size"),  rete::var("y"))
+    };
+
+    r1.conditions_size = 2;
+    r1.conditions = r1_conditions;
+    r1.action = r1_handler;
+
+    rete::rule_t r2;
+    r2.name = "rule #2";
+    r2.salience = 0;
+
+    rete::condition_t r2_conditions[2] = {
+        rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
+        rete::condition_t(rete::var("x"), rete::attr("cost"),  rete::value_int(100))
+    };
+
+    r2.conditions_size = 2;
+    r2.conditions = r2_conditions;
+    r2.action = r1_handler;
+
+    rete::rete_t* rs = rete::rete_t_init();
+    rete::add_rule(rs, r1);
+    rete::add_rule(rs, r2);
+
+    REQUIRE( (rs->alpha_memory_count == 3) ); // 1 per condition, 1 is shared = 3
+    REQUIRE( (rs->beta_memory_count == 2) );  // 1 shared root + 1 (cost condition) = 2
+    REQUIRE( (rs->join_nodes_count == 3) );   // 1 per AM = 3
+    REQUIRE( (rs->production_nodes_count == 2) ); // 1 per rule = 2
+    REQUIRE( (rs->token_count == 0) ); // no tokens are stored yet
+
+    rete::rete_t_destroy(rs);
+
 }/* }}}*/
