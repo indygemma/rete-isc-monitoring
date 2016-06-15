@@ -112,6 +112,145 @@ namespace rete {
         return new alpha_node_t();
     }
 
+    /* Given a wme and the variables from an alpha memory,
+     * update the variable mapping to include the WME triple
+     * (id, attr, value).
+     */
+    void wme_t_update_variables(wme_t* wme, std::vector<maybe_var_t> variables)
+    {
+        std::vector<varmap_t> wme_variables;
+
+        for (maybe_var_t& mvar : variables) {
+            varmap_t varmap;
+            varmap.has_id = mvar.has_id;
+            varmap.has_attr = mvar.has_attr;
+            varmap.has_value = mvar.has_value;
+
+            if (varmap.has_id) {
+                varmap.id_var = mvar.id_var;
+                varmap.id = id(wme->identifier);
+            }
+
+            if (varmap.has_attr) {
+                varmap.attr_var = mvar.attr_var;
+                varmap.attr = attr(wme->attribute);
+            }
+
+            if (varmap.has_value) {
+                varmap.value_var = mvar.value_var;
+                varmap.value = wme->value;
+            }
+        }
+
+        wme->variables = wme_variables;
+    }
+
+    bool alpha_node_t_wme_exists(alpha_node_t* an, wme_t* wme)
+    {
+        // TODO: this costs N for the number of existing wmes in an, should
+        // an->wmes be a different structure for easier searching of wmes
+        // for better performance?
+        return std::find(an->wmes.begin(), an->wmes.end(), wme) != an->wmes.end();
+    }
+
+    void alpha_node_t_add_wme(alpha_node_t* an, wme_t* wme)
+    {
+        an->wmes.push_back(wme);
+    }
+
+    void alpha_node_t_update_wmes(alpha_node_t* am)
+    {
+        // update this alpha node' wmes with the newly added condition
+        for (wme_t* wme : am->wmes) {
+            wme_t_update_variables(wme, am->variables);
+        }
+    }
+
+
+    /*
+     * Associate variables that are declared in condition to the Alpha Node.
+     */
+    void alpha_node_t_associate_variables(alpha_node_t* am, condition_t& condition)
+    {
+        bool vi = !condition.identifier_is_constant;
+        bool va = !condition.attribute_is_constant;
+        bool vv = !condition.value_is_constant;
+
+        maybe_var_t mvar;
+        mvar.has_id    = vi;
+        mvar.has_attr  = va;
+        mvar.has_value = vv;
+
+        if (vi) mvar.id_var = condition.identifier_as_var;
+        if (va) mvar.attr_var = condition.attribute_as_var;
+        if (vv) mvar.value_var = condition.value_as_var;
+
+        if (!vi && !va && !vv)
+            return;
+
+        am->variables.push_back(mvar);
+    }
+
+    void alpha_node_t_activate_matching_wmes(rete_t* rs, alpha_node_t* am, condition_t& condition)
+    {
+        for (auto entry : rs->wme_table) {
+            wme_t* wme = entry.second;
+            if (wme_t_matches_condition(wme, condition)) {
+                alpha_node_t_activate(rs, am, wme, wme::operation::ADD);
+            }
+        }
+    }
+
+    void alpha_node_t_remove_wme(alpha_node_t* an, wme_t* wme)
+    {
+        an->wmes.erase(std::remove(an->wmes.begin(), an->wmes.end(), wme), an->wmes.end());
+    }
+
+    void alpha_node_t_activate(rete_t* rs, alpha_node_t* an, wme_t* wme,
+                               wme::operation::type wme_op)
+    {
+        printf("[DEBUG] alpha_node_t_activate\n");
+        switch (wme_op)
+        {
+            case wme::operation::ADD: {
+                wme_t_update_variables(wme, an->variables);
+                if (!alpha_node_t_wme_exists(an, wme)) {
+                    alpha_node_t_add_wme(an, wme);
+                    for (join_node_t* jn : an->join_nodes) {
+                        join_node_t_right_activate(rs, jn, wme, wme_op);
+                    }
+                }
+            }
+            break;
+
+            case wme::operation::DELETE: {
+                for (join_node_t* jn : an->join_nodes) {
+                    join_node_t_right_activate(rs, jn, wme, wme_op);
+                }
+                alpha_node_t_remove_wme(an, wme);
+                rete_t_remove_wme(rs, wme);
+                // TODO: do unlink logic here
+            }
+            break;
+        }
+
+        sync_activated_production_nodes(rs);
+    }
+
+    bool alpha_node_t_has_condition(alpha_node_t* am, condition_t& condition)
+    {
+        auto it = std::find(am->conditions.begin(), am->conditions.end(), condition);
+        return (it != am->conditions.end());
+    }
+
+    void alpha_node_t_associate_condition(alpha_node_t* am, condition_t& condition)
+    {
+        if (!alpha_node_t_has_condition(am, condition)) {
+            alpha_node_t_associate_variables(am, condition);
+            am->conditions.push_back(condition);
+        }
+    }
+
     void alpha_node_t_destroy(alpha_node_t* x)
     {
         delete x;
@@ -127,28 +266,50 @@ namespace rete {
         }
     }
 
-    alpha_node_t* add_condition(rete_t* rs, condition_t& condition)
+    /*
+     * Add a condition to the rete network, creating the relevant Alpha Node
+     * as needed. The reference to `created` is set to the status of the
+     * creation of that Alpha Node.
+     */
+    alpha_node_t* add_condition(rete_t* rs, condition_t& condition, bool& created)
     {
-        printf("1%s...%d\n", condition.as_key().c_str(), rs->alpha_memory_count);
         // lookup constants: id, attr, value
         alpha_node_t* maybe_am = lookup_alpha_memory_for_condition(rs, condition);
         if (!maybe_am) {
-            printf("2\n");
+            created = true;
             alpha_node_t* new_am  = alpha_node_t_init();
-            printf("3\n");
-            new_am->conditions.push_back(condition);
-            printf("4\n");
+
+            alpha_node_t_associate_condition(new_am, condition);
+
             rs->alpha_network[condition] = new_am;
-            printf("5\n");
             rs->alpha_memory_count++;
-            printf("6\n");
             return new_am;
         } else {
-            // TODO: make sure the condition is unique
-            maybe_am->conditions.push_back(condition);
-            printf("7\n");
+            created = false;
+
+            alpha_node_t_associate_condition(maybe_am, condition);
+
             return maybe_am;
         }
+    }
+
+    alpha_node_t* add_condition(rete_t* rs, condition_t& condition)
+    {
+        bool created;
+        return add_condition(rs, condition, created);
+    }
+
+    alpha_node_t* build_or_share_alpha_node_t(rete_t* rs, condition_t& condition)
+    {
+        bool created;
+        alpha_node_t* am = add_condition(rs, condition, created);
+        // TODO: include forced option
+        if (created) {
+            alpha_node_t_activate_matching_wmes(rs, am, condition);
+        } else {
+            alpha_node_t_update_wmes(am);
+        }
+        return am;
     }
 
     value_t wme_t_value_of(wme_t* wme, join_test::condition_field field)
@@ -183,7 +344,7 @@ namespace rete {
     join_test_result perform_join_tests(std::vector<join_test_t> jts, token_t* token, wme_t* wme)
     {
         join_test_result result;
-        result.passed = true; // default to true
+        result.passed = jts.size() > 0; // default to true
 
         for (join_test_t& jt : jts) {
 
@@ -191,6 +352,7 @@ namespace rete {
             value_t arg1 = wme_t_value_of(wme, jt.field_of_arg1);
 
             if (jt.type == join_test::DEFAULT || jt.type == join_test::VARIABLE) {
+                printf("token_t_get_nth_wme %p[%d]\n", token, jt.condition_of_arg2);
                 wme_t* wme2 = token_t_get_nth_wme(token, jt.condition_of_arg2);
 
                 // arg2 as value_t
@@ -210,13 +372,21 @@ namespace rete {
 
     token_t* token_t_init(rete_t* rs, token_t* parent, wme_t* wme, std::vector<var_t> vars)
     {
+        printf("creating token for wme: %s, %s\n", wme->identifier, wme->attribute);
         token_t* new_token = new token_t();
         new_token->parent = parent;
         new_token->wme = wme;
         new_token->vars = vars;
 
         rs->token_count++;
+        printf("[DEBUG] token count increased to: %d\n", rs->token_count);
 
+        return new_token;
+    }
+
+    token_t* token_t_dummy_init()
+    {
+        token_t* new_token = new token_t();
         return new_token;
     }
 
@@ -239,6 +409,7 @@ namespace rete {
                                    beta_node_t* bn, token_t* parent_token, wme_t* wme,
                                    std::vector<var_t> vars, wme::operation::type wme_op)
     {
+        printf("[DEBUG] beta_node_t_left_activate called\n");
         switch (wme_op) {
             case wme::operation::ADD: {
                 token_t* new_token = token_t_init(rs, parent_token, wme, vars);
@@ -286,11 +457,89 @@ namespace rete {
         rs->conflict_set.push_back(activated);
     }
 
+    /*
+     * Take the activated production nodes with their associated tokens and merge
+     * them with the global conflict set defined in rete_t to be triggered via
+     * rete_t_trigger_production_nodes
+     */
+    void sync_activated_production_nodes(rete_t* rs)
+    {
+        for (activated_production_node_t& apn : rs->conflict_set) {
+            switch (apn.wme_op) {
+                case wme::operation::ADD: {
+                    token_key_t key = token_key_t(apn.token);
+
+                    // initialize vector if key does not exist
+                    //activated_production_table_type::const_iterator it = rs->activated_production_table.find(key);
+                    //if (it == rs->activated_production_table.end()) {
+                        //std::vector<activated_production_node_t> xs;
+                        //rs->activated_production_table[key] = xs;
+                    //}
+
+                    rs->activated_production_table[key].push_back(apn);
+                }
+                break;
+
+                case wme::operation::DELETE: {
+                    rs->activated_production_table.erase(token_key_t(apn.token));
+                }
+                break;
+            }
+        }
+
+        // TODO: conflict set might have to be cleared here? What's the reason for keeping it as is?
+    }
+
+    void activate_alpha_nodes_for_wme(rete_t* rs, wme_t* wme, wme::operation::type wme_op)
+    {
+        for (condition_t& condition : wme_t_derive_conditions_for_lookup(wme)) {
+            alpha_node_t* am = lookup_alpha_memory_for_condition(rs, condition);
+            if (am) {
+                alpha_node_t_activate(rs, am, wme, wme_op);
+            }
+        }
+    }
+
+    void rete_t_add_wme(rete_t* rs, wme_t* wme)
+    {
+        printf("[DEBUG] rete_t_add_wme\n");
+
+        assert( rete_t_find_wme(rs, wme->identifier, wme->attribute) == NULL );
+
+        rs->wme_table[wme_key_t(wme->identifier, wme->attribute)] = wme;
+
+        activate_alpha_nodes_for_wme(rs, wme, wme::operation::ADD);
+    }
+
+    void rete_t_remove_wme(rete_t* rs, wme_t* wme)
+    {
+        assert( rete_t_find_wme(rs, wme->identifier, wme->attribute) != NULL) ;
+
+        rs->wme_table.erase(wme_key_t(wme->identifier, wme->attribute));
+
+        wme_table_type::const_iterator it = rs->wme_table.find(
+                wme_key_t(wme->identifier, wme->attribute));
+        if (it != rs->wme_table.end()) {
+            activate_alpha_nodes_for_wme(rs, wme, wme::operation::DELETE);
+        }
+    }
+
+    wme_t* rete_t_find_wme(rete_t* rs, const char* id, const char* attr)
+    {
+        wme_table_type::const_iterator it = rs->wme_table.find(wme_key_t(id, attr));
+        if (it == rs->wme_table.end()) {
+            return NULL;
+        } else {
+            return it->second;
+        }
+    }
+
     void production_node_t_left_activate(rete_t* rs,
                                          production_node_t* pn, token_t* parent_token,
                                          wme_t* wme, std::vector<var_t> vars,
                                          wme::operation::type wme_op)
     {
+        printf("[DEBUG] production_node_t_left_activate\n");
         switch(wme_op) {
             case wme::operation::ADD: {
                 token_t* new_token = token_t_init(rs, parent_token, wme, vars);
@@ -318,6 +567,7 @@ namespace rete {
                                                    wme_t* wme,
                                                    wme::operation::type wme_op)
     {
+        printf("[DEBUG] left_activate_after_successful_join_tests\n");
         join_test_result result = perform_join_tests(jn->join_tests, token, wme);
         if (result.passed)
         {
@@ -346,7 +596,10 @@ namespace rete {
     void join_node_t_right_activate(rete_t* rs, join_node_t* jn, wme_t* wme,
                                     wme::operation::type wme_op)
     {
+        printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
         // TODO: handle unlinking logic here
+        printf("parent beta memory of this join node: %p\n", jn->parent_beta_memory);
+        printf("parent beta memory token count: %d\n", jn->parent_beta_memory->tokens.size());
         for (token_t* token : jn->parent_beta_memory->tokens) {
             left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op);
         }
@@ -377,10 +630,110 @@ namespace rete {
         }
     }
 
+    wme_t* wme_t_init(rete_t* rs, const char* id, const char* attr, value_t& val)
+    {
+        wme_t* wme = new wme_t();
+        wme->identifier = (char*)malloc(strlen(id));
+        wme->attribute = (char*)malloc(strlen(attr));
+        strcpy(wme->identifier, id);
+        strcpy(wme->attribute, attr);
+        wme->value = val;
+
+        rs->wme_count++;
+
+        return wme;
+    }
+
+    bool wme_t_matches_condition(wme_t* wme, condition_t& condition)
+    {
+        bool vi = !condition.identifier_is_constant;
+        bool va = !condition.attribute_is_constant;
+        bool vv = !condition.value_is_constant;
+
+        if (vi && va && vv)
+            return true;
+
+        if (vi && va && !vv) {
+            return condition.value_as_val == wme->value;
+        }
+
+        if (vi && !va && vv) {
+            return strcmp(condition.attribute_as_val.name, wme->attribute) == 0;
+        }
+
+        if (!vi && va && vv) {
+            return strcmp(condition.identifier_as_val.name, wme->identifier) == 0;
+        }
+
+        if (!vi && !va && vv) {
+            return ( strcmp(condition.identifier_as_val.name, wme->identifier) == 0 &&
+                     strcmp(condition.attribute_as_val.name, wme->attribute) == 0);
+        }
+
+        if (vi && !va && !vv) {
+            return ( strcmp(condition.attribute_as_val.name, wme->attribute) == 0 &&
+                     condition.value_as_val == wme->value);
+        }
+
+        if (!vi && !va && !vv) {
+            return ( strcmp(condition.identifier_as_val.name, wme->identifier) == 0 &&
+                     strcmp(condition.attribute_as_val.name, wme->attribute) == 0 &&
+                     condition.value_as_val == wme->value);
+        }
+
+    }
+
+    void wme_t_destroy(rete_t* rs, wme_t* wme)
+    {
+        free(wme->identifier);
+        free(wme->attribute);
+        delete wme;
+        rs->wme_count--;
+    }
+
+    std::vector<condition_t> wme_t_derive_conditions_for_lookup(wme_t* wme)
+    {
+        var_t   w = var("*");
+        id_t    i = id(wme->identifier);
+        attr_t  a = attr(wme->attribute);
+        value_t v = wme->value;
+
+        std::vector<condition_t> cs;
+        cs.push_back(condition_t(w, w, w));
+        cs.push_back(condition_t(w, w, v));
+        cs.push_back(condition_t(w, a, w));
+        cs.push_back(condition_t(i, w, w));
+        cs.push_back(condition_t(i, a, w));
+        cs.push_back(condition_t(w, a, v));
+        cs.push_back(condition_t(i, w, v));
+        cs.push_back(condition_t(i, a, v));
+
+        return cs;
+    }
+
+    void change_wme(rete_t* rs, wme_t* wme, const char* id, const char* attr, value_t val)
+    {
+        rete_t_remove_wme(rs, wme);
+        create_wme(rs, id, attr, val);
+    }
+
+    void create_wme(rete_t* rs, const char* id, const char* attr, value_t val)
+    {
+        printf("[DEBUG] create_wme\n");
+        wme_t* wme = rete_t_find_wme(rs, id, attr);
+        if (!wme) {
+            wme = wme_t_init(rs, id, attr, val);
+            rete_t_add_wme(rs, wme);
+        } else {
+            change_wme(rs, wme, id, attr, val);
+        }
+    }
+
     void add_rule(rete_t* rs, rule_t& rule)
     {
         std::vector<condition_t> earlier_conditions;
         beta_node_t* current_bm = rs->root_beta_node;
+        printf("[DEBUG] ADDING RULE. Root beta node tokens: %d\n", rs->root_beta_node->tokens.size());
         join_node_t* jn;
         bool created;
 
@@ -390,7 +743,7 @@ namespace rete {
         printf("length: %d\n", rule.conditions_size);
         for (unsigned int i=0;i<rule.conditions_size;i++) {
             printf("i: %d\n", i);
-            alpha_node_t* am = add_condition(rs, rule.conditions[i]);
+            alpha_node_t* am = build_or_share_alpha_node_t(rs, rule.conditions[i]);
             std::vector<join_test_t> tests = condition_t_get_join_tests(rule.conditions[i], earlier_conditions);
             jn = build_or_share_join_node_t(rs, current_bm, am, tests, created);
 
@@ -409,6 +762,8 @@ namespace rete {
             join_node_t_update_matches(rs, jn);
             rs->production_nodes_count++;
         }
+
+        sync_activated_production_nodes(rs);
     }
 
     production_node_t* production_node_t_init(const char* name, int salience, join_node_t* jn, rule_action code)
@@ -518,6 +873,7 @@ namespace rete {
         // jn->beta_memories = [];
         jn->production_node = NULL;
         jn->parent_beta_memory = bm;
+        printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p\n", jn, bm);
         jn->alpha_memory = am;
         jn->join_tests = jts;
 
@@ -584,6 +940,8 @@ namespace rete {
         rete_t* rs = new rete_t();
 
         rs->root_beta_node = beta_node_t_init();
+        printf("[DEBUG] ROOT BETA NODE: %p\n", rs->root_beta_node);
+        rs->root_beta_node->tokens.push_back(token_t_dummy_init());
         rs->beta_memory_count++;
 
         return rs;
@@ -591,6 +949,8 @@ namespace rete {
 
     void rete_t_destroy(rete_t* rs)
     {
+        for (token_t* token : rs->root_beta_node->tokens)
+            token_t_destroy(rs, token);
         beta_node_t_destroy(rs->root_beta_node);
         // TODO: destroy all beta memory nodes
         // TODO: destroy all join nodes

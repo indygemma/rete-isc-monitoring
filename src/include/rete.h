@@ -377,27 +377,162 @@ namespace rete {
         }
     };
 
-    struct wme_t {
+    /* Represents the key to a hash table containing wme_t*
+     */
+    struct wme_key_t
+    {
+        wme_key_t(const char* id, const char* attr)
+        {
+            identifier = id;
+            attribute = attr;
+        }
+
+        bool operator==(const wme_key_t &other) const
+        {
+            if (strcmp(identifier, other.identifier) != 0)
+                return false;
+
+            if (strcmp(attribute, other.attribute) != 0)
+                return false;
+
+            return true;
+        }
+
         const char* identifier;
         const char* attribute;
-        value_t value;
-        // TODO: VarMap variables; how to implement this..and how is this used?
+    };
+
+    struct wme_key_hasher
+    {
+        std::size_t operator()(const wme_key_t& k) const
+        {
+            using std::size_t;
+            using std::hash;
+            using std::string;
+            std::size_t seed = 0;
+
+            // id
+            seed = hash_combine(seed, hash<string>()(k.identifier));
+            // attr
+            seed = hash_combine(seed, hash<string>()(k.attribute));
+            return seed;
+        }
     };
 
     struct beta_node_t;
     struct join_node_t;
 
+    struct varmap_t {
+        bool has_id;
+        bool has_attr;
+        bool has_value;
+
+        var_t id_var;
+        var_t attr_var;
+        var_t value_var;
+
+        id_t id;
+        attr_t attr;
+        value_t value;
+    };
+
+    struct wme_t {
+        char* identifier;
+        char* attribute;
+        value_t value;
+        std::vector<varmap_t> variables;
+    };
+
+    struct maybe_var_t {
+        bool has_id;
+        bool has_attr;
+        bool has_value;
+
+        var_t id_var;
+        var_t attr_var;
+        var_t value_var;
+    };
+
     struct alpha_node_t {
         std::vector<wme_t*> wmes;
         std::vector<join_node_t*> join_nodes;
         std::vector<condition_t> conditions;
-        // TODO: amVariables (Maybe Var, Maybe Var, Maybe Var)
+        std::vector<maybe_var_t> variables;
     };
 
     struct token_t {
         token_t* parent; // optional
         wme_t* wme;
         std::vector<var_t> vars;
+
+        bool operator==(const token_t& other) const
+        {
+            if (parent != other.parent)
+                return false;
+
+            if (wme != other.wme)
+                return false;
+
+            int size1 = vars.size();
+            int size2 = other.vars.size();
+
+            if (size1 != size2)
+                return false;
+
+            for (int i=0;i<size1;i++)
+                if (!(vars.at(i) == other.vars.at(i)))
+                    return false;
+
+            return true;
+        }
+    };
+
+    /* Represents the key to a hash table containing token_t*
+     * keys.
+     */
+    struct token_key_t
+    {
+        token_key_t(token_t* token)
+        {
+            this->token = token;
+        }
+
+        bool operator==(const token_key_t &other) const
+        {
+            return token == other.token;
+        }
+
+        token_t* token;
+    };
+
+    struct token_key_hasher
+    {
+        std::size_t operator()(const token_key_t& k) const
+        {
+            using std::size_t;
+            using std::hash;
+            size_t seed = 0;
+
+            // parent
+            if (k.token->parent) {
+                seed = hash_combine(seed, token_key_hasher()(token_key_t(k.token->parent)));
+            }
+
+            // wme. If wme is not set, then we are dealing with a dummy token
+            if (k.token->wme) {
+                seed = hash_combine(seed,
+                        wme_key_hasher()(
+                            wme_key_t(
+                                k.token->wme->identifier,
+                                k.token->wme->attribute)));
+            }
+
+            // std::vector<var_t>
+            for (var_t& var : k.token->vars)
+                seed = hash_combine(seed, hash<std::string>()(var.name));
+
+            return seed;
+        }
     };
 
     namespace join_test {
@@ -507,10 +642,9 @@ namespace rete {
         std::vector<token_t*> tokens;
     };
 
-    alpha_node_t* alpha_node_t_init();
-    void alpha_node_t_destroy(alpha_node_t*);
-
     typedef std::unordered_map<rete::condition_t, alpha_node_t*, rete::condition_t_hasher> alpha_network_type;
+    typedef std::unordered_map<rete::wme_key_t, wme_t*, rete::wme_key_hasher> wme_table_type;
+    typedef std::unordered_map<rete::token_key_t, std::vector<activated_production_node_t>, rete::token_key_hasher> activated_production_table_type;
 
     struct rete_t {
         int alpha_memory_count = 0;
@@ -518,10 +652,13 @@ namespace rete {
         int join_nodes_count = 0;
         int production_nodes_count = 0;
         int token_count = 0;
+        int wme_count = 0;
 
         alpha_network_type alpha_network;
+        wme_table_type wme_table;
         beta_node_t* root_beta_node;
         std::vector<activated_production_node_t> conflict_set;
+        activated_production_table_type activated_production_table;
     };
 
     rete_t* rete_t_init();
@@ -546,6 +683,8 @@ namespace rete {
     // TODO: which of these functions are actually public?
     alpha_node_t* add_condition(rete_t* rs, condition_t& condition);
     void add_rule(rete_t* rs, rule_t& rule);
+    void create_wme(rete_t* rs, const char* id, const char* attr, value_t val);
+    void remove_wme(rete_t* rs, wme_t*);
     std::vector<join_test_t> condition_t_get_join_tests(condition_t&, std::vector<condition_t>);
     join_node_t* build_or_share_join_node_t(rete_t*, beta_node_t*, alpha_node_t*, std::vector<join_test_t>, bool&);
     beta_node_t* build_or_share_beta_node_t(rete_t*, join_node_t*);
@@ -553,6 +692,10 @@ namespace rete {
     // rete_t functions
     void rete_t_add_activated_production_node(rete_t*, production_node_t*, token_t*);
     void rete_t_remove_activated_production_nodes_with_token(rete_t*, token_t*);
+    void rete_t_add_wme(rete_t* rs, wme_t* wme);
+    void rete_t_remove_wme(rete_t* rs, wme_t* wme);
+    wme_t* rete_t_find_wme(rete_t* rs, const char* id, const char* attr);
+    void sync_activated_production_nodes(rete_t* rs);
 
     // JOIN NODE functions
     join_node_t* join_node_t_init(beta_node_t*, alpha_node_t*, std::vector<join_test_t>);
@@ -563,7 +706,16 @@ namespace rete {
     void join_node_t_destroy(join_node_t*);
 
     // ALPHA NODE functions
+    alpha_node_t* alpha_node_t_init();
     void alpha_node_t_add_join_node(alpha_node_t*, join_node_t*);
+    void alpha_node_t_add_wme(alpha_node_t*, wme_t*);
+    void alpha_node_t_remove_wme(alpha_node_t*, wme_t*);
+    void alpha_node_t_activate(rete_t*, alpha_node_t*, wme_t*, wme::operation::type);
+    void alpha_node_t_associate_condition(alpha_node_t*, condition_t&);
+    void alpha_node_t_activate_matching_wmes(rete_t*, alpha_node_t*, condition_t&);
+    bool alpha_node_t_wme_exists(alpha_node_t*, wme_t*);
+    void alpha_node_t_update_wmes(alpha_node_t*);
+    void alpha_node_t_destroy(alpha_node_t*);
 
     // BETA NODE functions
     beta_node_t* beta_node_t_init(join_node_t*);
@@ -586,6 +738,12 @@ namespace rete {
     // TOKEN functions
     token_t* token_t_init(rete_t*, token_t*, wme_t*, std::vector<var_t>);
     void token_t_destroy(rete_t*, token_t*);
+
+    // wme_t functions
+    wme_t* wme_t_init(rete_t*, const char*, const char*, value_t&);
+    bool wme_t_matches_condition(wme_t*, condition_t&);
+    std::vector<condition_t> wme_t_derive_conditions_for_lookup(wme_t*);
+    void wme_t_destroy(rete_t*, wme_t*);
 }
 
 #endif

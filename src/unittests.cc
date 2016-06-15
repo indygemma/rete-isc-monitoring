@@ -102,3 +102,40 @@ TEST_CASE( "Add multiple rules" ) {/* {{{*/
     rete::rete_t_destroy(rs);
 
 }/* }}}*/
+TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
+    rete::rule_t r;
+    r.name = "example rule";
+    r.salience = 0;
+
+    rete::condition_t conditions[4] = {
+        rete::condition_t(rete::var("x"), rete::attr("eye-colors"), rete::value_string("blue")),
+        rete::condition_t(rete::var("x"), rete::attr("height"),     rete::value_int(170)),
+        rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("y")),
+        rete::condition_t(rete::var("z"), rete::attr("age"),        rete::var("y"))
+    };
+
+    r.conditions_size = 4;
+    r.conditions = conditions;
+    r.action = r1_handler;
+
+    rete::rete_t* rs = rete::rete_t_init();
+    // add the WME first before having any AMs, make sure that previously added WMEs are also checked
+    // at rule addition time.
+    rete::create_wme(rs, "jack", "eye-colors", rete::value_string("blue"));
+    rete::add_rule(rs, r);
+    rete::create_wme(rs, "jack", "height", rete::value_int(170));
+    rete::create_wme(rs, "jane", "height", rete::value_int(160));
+    rete::create_wme(rs, "jane", "age",    rete::value_int(25));
+
+    REQUIRE( (rs->wme_count == 4) ); // 4 WMEs so far
+    // tokens (successfully matched wmes) are created for "eye-colors blue", "height 170".
+    // "jane age 25" depends on "?x age ?y", is at the end is not stored as a token after
+    // the last join node.
+    REQUIRE( (rs->token_count == 2) );
+
+    rete::create_wme(rs, "jack", "age", rete::value_int(25));
+
+    // "jack age 25" is successfully matched and is added as a token. The full path to the
+    // production node is now open with two matched WMEs "jack age 25" and "jane age 25".
+    REQUIRE( (rs->token_count == 5) );
+}/* }}}*/
