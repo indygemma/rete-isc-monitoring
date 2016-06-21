@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unordered_map>
 #include <vector>
+#include <deque>
 
 namespace rete {
 
@@ -53,6 +54,12 @@ namespace rete {
         };
     }
 
+    struct value_t;
+
+    std::size_t hash_combine(std::size_t seed, std::size_t hash_value);
+    std::size_t value_t_hash(value_t val);
+    std::string value_t_show(value_t val);
+
     struct value_t {
         value::type type;
         unsigned long n; // how many of the aggregated type values
@@ -67,6 +74,7 @@ namespace rete {
 
         bool operator==(const value_t &other) const
         {
+            printf("[DEBUG] comparing value_t. (%s vs %s)\n", value_t_show(*this).c_str(), value_t_show(other).c_str());
             if (type != other.type)
                 return false;
 
@@ -95,10 +103,6 @@ namespace rete {
         }
 
     };
-
-    std::size_t hash_combine(std::size_t seed, std::size_t hash_value);
-    std::size_t value_t_hash(value_t val);
-    std::string value_t_show(value_t val);
 
     class condition_t {
 
@@ -567,6 +571,7 @@ namespace rete {
             }
         };
 
+        const char* show_condition_field(condition_field&);
     }
 
     struct join_test_t {
@@ -607,6 +612,11 @@ namespace rete {
 
             return true;
         }
+    };
+
+    struct maybe_join_test_t {
+        bool has_join_test;
+        join_test_t join_test;
     };
 
     struct join_test_result {
@@ -685,7 +695,7 @@ namespace rete {
     void add_rule(rete_t* rs, rule_t& rule);
     void create_wme(rete_t* rs, const char* id, const char* attr, value_t val);
     void remove_wme(rete_t* rs, wme_t*);
-    std::vector<join_test_t> condition_t_get_join_tests(condition_t&, std::vector<condition_t>);
+    std::vector<join_test_t> condition_t_get_join_tests(condition_t&, std::deque<condition_t>);
     join_node_t* build_or_share_join_node_t(rete_t*, beta_node_t*, alpha_node_t*, std::vector<join_test_t>, bool&);
     beta_node_t* build_or_share_beta_node_t(rete_t*, join_node_t*);
 
@@ -744,6 +754,9 @@ namespace rete {
     bool wme_t_matches_condition(wme_t*, condition_t&);
     std::vector<condition_t> wme_t_derive_conditions_for_lookup(wme_t*);
     void wme_t_destroy(rete_t*, wme_t*);
+
+    // condition_t functions
+    maybe_var_t condition_t_find_variables(condition_t&);
 }
 
 #endif
