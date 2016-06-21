@@ -8,6 +8,10 @@
 
 namespace rete {
 
+    const char* bool_show(bool x) {
+        return x ? "true" : "false";
+    }
+
     var_t var(const char* name) {
         var_t v;
         v.name = name;
@@ -113,6 +117,14 @@ namespace rete {
         printf("\tWME: (%s, %s, %s)\n", wme->identifier, wme->attribute, value_t_show(wme->value).c_str());
     }
 
+    void alpha_node_t_show(alpha_node_t* an)
+    {
+        printf("Alpha Node(%)\n", an);
+        printf("-> WMES:\n");
+        for (wme_t* wme : an->wmes)
+            wme_t_show(wme);
+    }
+
     void token_t_show(token_t* token, int n)
     {
         printf("\tToken(%d)\n", n);
@@ -198,14 +210,18 @@ namespace rete {
         // TODO: this costs N for the number of existing wmes in an, should
         // an->wmes be a different structure for easier searching of wmes
         // for better performance?
-        return std::find(an->wmes.begin(), an->wmes.end(), wme) != an->wmes.end();
+        bool exists = std::find(an->wmes.begin(), an->wmes.end(), wme) != an->wmes.end();
+        printf("[DEBUG alpha_node_t_wme_exists? %s\n", bool_show(exists));
+        wme_t_show(wme);
+        alpha_node_t_show(an);
+        return exists;
     }
 
     void alpha_node_t_add_wme(alpha_node_t* an, wme_t* wme)
     {
         printf("\t\t\t[DEBUG] alpha_node_t_add_wme: (alpha node:%p)\n", an);
         wme_t_show(wme);
-        an->wmes.push_back(wme);
+        an->wmes.push_front(wme);
     }
 
     void alpha_node_t_update_wmes(alpha_node_t* am)
@@ -416,8 +432,8 @@ namespace rete {
         join_test_result result;
         result.passed = true; // default to true
 
-        printf("[DEBUG] perform_join_tests: join test size = %d. WME is:\n", jts.size());
-        wme_t_show(wme);
+        //printf("[DEBUG] perform_join_tests: join test size = %d. WME is:\n", jts.size());
+        //wme_t_show(wme);
 
         assert( wme != NULL );
 
@@ -425,30 +441,31 @@ namespace rete {
 
             // arg1 as value_t
             value_t arg1 = wme_t_value_of(wme, jt.field_of_arg1);
-            printf("\tWME1:\n");
+            //printf("\tWME1:\n");
             wme_t_show(wme);
-            printf("\tfield of arg1: %d\n", jt.field_of_arg1);
+            //printf("\tfield of arg1: %d\n", jt.field_of_arg1);
 
             if (jt.type == join_test::DEFAULT || jt.type == join_test::VARIABLE) {
-                printf("token_t_get_nth_wme %p[%d]\n", token, jt.condition_of_arg2);
+                //printf("token_t_get_nth_wme %p[%d]\n", token, jt.condition_of_arg2);
                 wme_t* wme2 = token_t_get_nth_wme(token, jt.condition_of_arg2);
 
-                printf("\tWME2:\n");
-                wme_t_show(wme2);
-                printf("\tfield of arg2: %d\n", jt.field_of_arg2);
+                //printf("\tWME2:\n");
+                //wme_t_show(wme2);
+                //printf("\tfield of arg2: %d\n", jt.field_of_arg2);
 
                 assert( wme2 != NULL );
 
                 // arg2 as value_t
                 value_t arg2 = wme_t_value_of(wme2, jt.field_of_arg2);
 
-                printf("function: %p\n", jt.comparator.function);
+                //printf("function: %p\n", jt.comparator.function);
                 if (!jt.comparator.function(arg1, arg2)) {
                     result.passed = false;
+                    return result;
                 }
                 result.vars.push_back(jt.variable);
 
-                printf("result.passed = %s\n", result.passed ? "true" : "false");
+                //printf("result.passed = %s\n", result.passed ? "true" : "false");
 
             } else if (jt.type == join_test::CONSTANT) {
                 result.passed = result.passed && jt.comparator.function(arg1, jt.constant_value);
@@ -663,13 +680,14 @@ namespace rete {
                                                    wme_t* wme,
                                                    wme::operation::type wme_op)
     {
-        printf("[DEBUG] ================================= left_activate_after_successful_join_tests\n");
+        //printf("[DEBUG] ================================= left_activate_after_successful_join_tests\n");
         wme_t_show(wme);
         token_t_show(token);
         join_test_result result = perform_join_tests(jn->join_tests, token, wme);
         if (result.passed)
         {
-            for (beta_node_t* child_bn : jn->beta_memories) {
+            printf("JOIN TEST PASSED\n");
+            for (beta_node_t* child_bn : *jn->beta_memories) {
                 beta_node_t_left_activate(rs, child_bn, token, wme,
                         result.vars, wme_op);
             }
@@ -688,6 +706,8 @@ namespace rete {
         std::vector<join_test_t> jts = jn->join_tests;
         // TODO: handle unlinking here (line 1536 in w2 knottying)
         for (wme_t* wme : jn->alpha_memory->wmes) {
+            printf("prepare join test for WME:\n");
+            wme_t_show(wme);
             left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op);
         }
     }
@@ -715,11 +735,17 @@ namespace rete {
     {
         printf("[DEBUG] beta_node_t_update_matches\n");
         if (bn->parent_join_node) {
-            std::vector<beta_node_t*> current_bm_children = bn->parent_join_node->beta_memories;
-            std::vector<beta_node_t*> tmp_children;
-            tmp_children.push_back(bn);
+            std::vector<beta_node_t*>* current_bm_children = bn->parent_join_node->beta_memories;
+            std::vector<beta_node_t*>* tmp_children = new std::vector<beta_node_t*>();
+            tmp_children->push_back(bn);
 
             bn->parent_join_node->beta_memories = tmp_children;
+
+            printf("[DEBUG] bn->parent_join_node->beta_memories(%p) (before)[size:%d]\n",
+                    bn->parent_join_node->beta_memories,
+                    bn->parent_join_node->beta_memories->size());
+            for (beta_node_t* bn2 : (*bn->parent_join_node->beta_memories))
+                printf("%p\n", bn2);
 
             for (wme_t* wme : bn->parent_join_node->alpha_memory->wmes) {
                 join_node_t_right_activate(rs, bn->parent_join_node,
@@ -727,6 +753,12 @@ namespace rete {
             }
 
             bn->parent_join_node->beta_memories = current_bm_children;
+
+            printf("[DEBUG] bn->parent_join_node->beta_memories(%p) (after)[size:%d]\n",
+                    bn->parent_join_node->beta_memories,
+                    bn->parent_join_node->beta_memories->size());
+            for (beta_node_t* bn2 : *bn->parent_join_node->beta_memories)
+                printf("%p\n", bn2);
         }
     }
 
@@ -1053,7 +1085,7 @@ namespace rete {
     beta_node_t* build_or_share_beta_node_t(rete_t* rs, join_node_t* jn)
     {
         printf("[DEBUG] build_or_share_beta_node_t\n");
-        if (jn->beta_memories.empty()) {
+        if (jn->beta_memories->empty()) {
             printf("[DEBUG] build_or_share_beta_node_t: create new beta node\n");
 
             beta_node_t* new_bm = beta_node_t_init(jn);
@@ -1065,7 +1097,7 @@ namespace rete {
 
             return new_bm;
         } else {
-            return jn->beta_memories.at(0);
+            return jn->beta_memories->at(0);
         }
     }
 
@@ -1098,7 +1130,7 @@ namespace rete {
     {
         join_node_t* jn = new join_node_t();
 
-        // jn->beta_memories = [];
+        jn->beta_memories = new std::vector<beta_node_t*>();
         jn->production_node = NULL;
         jn->parent_beta_memory = bm;
         printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p and alpha memory: %p\n", jn, bm, am);
@@ -1110,7 +1142,7 @@ namespace rete {
 
     void join_node_t_add_beta_memory(join_node_t* jn, beta_node_t* bm)
     {
-        jn->beta_memories.push_back(bm);
+        jn->beta_memories->push_back(bm);
     }
 
     void join_node_t_add_production_node(join_node_t* jn, production_node_t* pn)
@@ -1120,12 +1152,14 @@ namespace rete {
 
     void join_node_t_destroy(join_node_t* jn)
     {
+        // TODO: delete individual beta nodes
+        delete jn->beta_memories;
         delete jn;
     }
 
     void alpha_node_t_add_join_node(alpha_node_t* am, join_node_t* jn)
     {
-        am->join_nodes.push_back(jn);
+        am->join_nodes.push_front(jn);
     }
 
     void beta_node_t_add_join_node(beta_node_t* bm, join_node_t* jn)

@@ -458,8 +458,8 @@ namespace rete {
     };
 
     struct alpha_node_t {
-        std::vector<wme_t*> wmes;
-        std::vector<join_node_t*> join_nodes;
+        std::deque<wme_t*> wmes;
+        std::deque<join_node_t*> join_nodes;
         std::vector<condition_t> conditions;
         std::vector<maybe_var_t> variables;
     };
@@ -639,7 +639,7 @@ namespace rete {
     };
 
     struct join_node_t {
-        std::vector<beta_node_t*> beta_memories;
+        std::vector<beta_node_t*>* beta_memories;
         production_node_t* production_node; // optional
         beta_node_t* parent_beta_memory; // not optional
         alpha_node_t* alpha_memory; // not optional

@@ -125,19 +125,30 @@ TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
     rete::add_rule(rs, r);
     rete::create_wme(rs, "jack", "height", rete::value_int(170));
     rete::create_wme(rs, "jane", "height", rete::value_int(160));
-    rete::create_wme(rs, "jack", "age",    rete::value_int(25));
+    rete::create_wme(rs, "jane", "age",    rete::value_int(25));
 
     REQUIRE( (rs->wme_count == 4) ); // 4 WMEs so far
     // tokens (successfully matched wmes) are created for "eye-colors blue", "height 170".
     // "jane age 25" depends on "?x age ?y", is at the end is not stored as a token after
     // the last join node.
-    //REQUIRE( (rs->token_count == 2) );
+    REQUIRE( (rs->token_count == 2) );
 
-    //rete::create_wme(rs, "jack", "age", rete::value_int(25));
+    rete::create_wme(rs, "jack", "age", rete::value_int(25));
 
-    //REQUIRE( (rs->wme_count == 5) );
+    REQUIRE( (rs->wme_count == 5) );
 
     // "jack age 25" is successfully matched and is added as a token. The full path to the
     // production node is now open with two matched WMEs "jack age 25" and "jane age 25".
+
+    // "jack age 25" is actually matched twice (two tokens in the same
+    // production node), once for right activating the AM for condition (?x,
+    // age, ?y) and then once more for right activating the AM for condition
+    // (?z, age, ?y). This can be avoided by processing the WMEs in AMs LIFO
+    // style. Thus we reduce the tokens from 6 to 5, which represent the same
+    // match.
+
     REQUIRE( (rs->token_count == 5) );
+
+    // TODO: 2 production node activations
+
 }/* }}}*/
