@@ -21,7 +21,9 @@ namespace rete {
 
     struct rete_t;
 
-    typedef void (*rule_action)(rete_t* state);
+    struct rule_action_state_t;
+
+    typedef void (*rule_action)(rule_action_state_t);
 
     struct var_t {
         const char* name;
@@ -102,6 +104,11 @@ namespace rete {
             return true;
         }
 
+    };
+
+    struct maybe_value_t {
+        bool has_value;
+        value_t value;
     };
 
     class condition_t {
@@ -246,17 +253,29 @@ namespace rete {
 
             bool operator==(const condition_t &other) const
             {
-                if (identifier_is_constant && other.identifier_is_constant)
+                if (identifier_is_constant != other.identifier_is_constant)
+                    return false;
+
+                if (attribute_is_constant != other.attribute_is_constant)
+                    return false;
+
+                if (value_is_constant != other.value_is_constant)
+                    return false;
+
+                if (identifier_is_constant && other.identifier_is_constant) {
                     if (strcmp(identifier_as_val.name, other.identifier_as_val.name) != 0)
                         return false;
+                }
 
-                if (attribute_is_constant && other.attribute_is_constant)
+                if (attribute_is_constant && other.attribute_is_constant) {
                     if (strcmp(attribute_as_val.name, other.attribute_as_val.name) != 0)
                         return false;
+                }
 
-                if (value_is_constant && other.value_is_constant)
+                if (value_is_constant && other.value_is_constant) {
                     if (!(value_as_val == other.value_as_val))
                         return false;
+                }
 
                 return true;
             }
@@ -427,7 +446,7 @@ namespace rete {
     struct join_node_t;
 
     struct varmap_t {
-        bool has_id;
+        bool has_id; // has_id meaning there is a variable in the identifier field
         bool has_attr;
         bool has_value;
 
@@ -571,6 +590,15 @@ namespace rete {
             }
         };
 
+        bool equal_f(value_t& x, value_t& y);
+
+        struct equal : comparator_t {
+            equal() {
+                description = "default equality test";
+                function = equal_f;
+            }
+        };
+
         const char* show_condition_field(condition_field&);
     }
 
@@ -636,6 +664,11 @@ namespace rete {
         wme::operation::type wme_op;
         production_node_t* production_node;
         token_t* token;
+
+        bool operator < (const activated_production_node_t& other)
+        {
+            return production_node->salience < other.production_node->salience;
+        }
     };
 
     struct join_node_t {
@@ -655,6 +688,7 @@ namespace rete {
     typedef std::unordered_map<rete::condition_t, alpha_node_t*, rete::condition_t_hasher> alpha_network_type;
     typedef std::unordered_map<rete::wme_key_t, wme_t*, rete::wme_key_hasher> wme_table_type;
     typedef std::unordered_map<rete::token_key_t, std::vector<activated_production_node_t>, rete::token_key_hasher> activated_production_table_type;
+    typedef std::unordered_map<std::string, value_t> mapped_variables_type;
 
     struct rete_t {
         int alpha_memory_count = 0;
@@ -682,6 +716,13 @@ namespace rete {
         rule_action action;
     };
 
+    struct rule_action_state_t {
+        rete_t* rete_state;
+        production_node_t* production_node;
+        token_t* token;
+        mapped_variables_type mapped_variables_table;
+    };
+
     var_t var(const char* name);
     id_t  id(const char* name);
     attr_t attr(const char* name);
@@ -695,6 +736,9 @@ namespace rete {
     void add_rule(rete_t* rs, rule_t& rule);
     void create_wme(rete_t* rs, const char* id, const char* attr, value_t val);
     void remove_wme(rete_t* rs, wme_t*);
+    maybe_value_t lookup_var(rule_action_state_t ras, const char*);
+    int activated_production_nodes(rete_t* rs);
+    void trigger_activated_production_nodes(rete_t* rs);
     std::vector<join_test_t> condition_t_get_join_tests(condition_t&, std::deque<condition_t>);
     join_node_t* build_or_share_join_node_t(rete_t*, beta_node_t*, alpha_node_t*, std::vector<join_test_t>, bool&);
     beta_node_t* build_or_share_beta_node_t(rete_t*, join_node_t*);

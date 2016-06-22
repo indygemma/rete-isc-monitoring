@@ -200,9 +200,12 @@ namespace rete {
                 varmap.value_var = mvar.value_var;
                 varmap.value = wme->value;
             }
+
+            wme_variables.push_back(varmap);
         }
 
-        wme->variables = wme_variables;
+        // TODO: LIFO / FIFO?
+        wme->variables.insert(wme->variables.end(), wme_variables.begin(), wme_variables.end());
     }
 
     bool alpha_node_t_wme_exists(alpha_node_t* an, wme_t* wme)
@@ -272,6 +275,25 @@ namespace rete {
         an->wmes.erase(std::remove(an->wmes.begin(), an->wmes.end(), wme), an->wmes.end());
     }
 
+    maybe_value_t lookup_var(rule_action_state_t ras, const char* varname)
+    {
+        maybe_value_t r;
+        r.has_value = false;
+
+        auto it = ras.mapped_variables_table.find(varname);
+        if (it != ras.mapped_variables_table.end()) {
+            r.has_value = true;
+            r.value = ras.mapped_variables_table[varname];
+        }
+
+        return r;
+    }
+
+    int activated_production_nodes(rete_t* rs)
+    {
+        return rs->activated_production_table.size();
+    }
+
     void alpha_node_t_activate(rete_t* rs, alpha_node_t* an, wme_t* wme,
                                wme::operation::type wme_op)
     {
@@ -303,10 +325,57 @@ namespace rete {
         sync_activated_production_nodes(rs);
     }
 
+    /*
+     * A specialized version of the operator== for condition_t which
+     * additionally checks whether the variable names match or not.
+     * operator== is used for hashing where the variables names
+     * are irrelevant, thus we need a specialized function to perform
+     * this check.
+     */
+    bool condition_t_equal_vars(condition_t& c1, condition_t& c2)
+    {
+        if (c1.identifier_is_constant != c2.identifier_is_constant)
+            return false;
+
+        if (c1.attribute_is_constant != c2.attribute_is_constant)
+            return false;
+
+        if (c1.value_is_constant != c2.value_is_constant)
+            return false;
+
+        if (c1.identifier_is_constant && c2.identifier_is_constant) {
+            if (strcmp(c1.identifier_as_val.name, c2.identifier_as_val.name) != 0)
+                return false;
+        } else {
+            if (strcmp(c1.identifier_as_var.name, c2.identifier_as_var.name) != 0)
+                return false;
+        }
+
+        if (c1.attribute_is_constant && c1.attribute_is_constant) {
+            if (strcmp(c1.attribute_as_val.name, c1.attribute_as_val.name) != 0)
+                return false;
+        } else {
+            if (strcmp(c1.attribute_as_var.name, c2.attribute_as_var.name) != 0)
+                return false;
+        }
+
+        if (c1.value_is_constant && c2.value_is_constant) {
+            if (!(c1.value_as_val == c2.value_as_val))
+                return false;
+        } else {
+            if (strcmp(c1.value_as_var.name, c2.value_as_var.name) != 0)
+                return false;
+        }
+
+        return true;
+    }
+
     bool alpha_node_t_has_condition(alpha_node_t* am, condition_t& condition)
     {
-        auto it = std::find(am->conditions.begin(), am->conditions.end(), condition);
-        return (it != am->conditions.end());
+        for (condition_t& c : am->conditions) {
+            if (condition_t_equal_vars(condition, c))
+                return true;
+        }
     }
 
     void alpha_node_t_associate_condition(alpha_node_t* am, condition_t& condition)
@@ -432,8 +501,8 @@ namespace rete {
         join_test_result result;
         result.passed = true; // default to true
 
-        //printf("[DEBUG] perform_join_tests: join test size = %d. WME is:\n", jts.size());
-        //wme_t_show(wme);
+        printf("[DEBUG] perform_join_tests: join test size = %d. WME is:\n", jts.size());
+        wme_t_show(wme);
 
         assert( wme != NULL );
 
@@ -441,17 +510,17 @@ namespace rete {
 
             // arg1 as value_t
             value_t arg1 = wme_t_value_of(wme, jt.field_of_arg1);
-            //printf("\tWME1:\n");
+            printf("\tWME1:\n");
             wme_t_show(wme);
-            //printf("\tfield of arg1: %d\n", jt.field_of_arg1);
+            printf("\tfield of arg1: %d\n", jt.field_of_arg1);
 
             if (jt.type == join_test::DEFAULT || jt.type == join_test::VARIABLE) {
-                //printf("token_t_get_nth_wme %p[%d]\n", token, jt.condition_of_arg2);
+                printf("token_t_get_nth_wme %p[%d]\n", token, jt.condition_of_arg2);
                 wme_t* wme2 = token_t_get_nth_wme(token, jt.condition_of_arg2);
 
-                //printf("\tWME2:\n");
-                //wme_t_show(wme2);
-                //printf("\tfield of arg2: %d\n", jt.field_of_arg2);
+                printf("\tWME2:\n");
+                wme_t_show(wme2);
+                printf("\tfield of arg2: %d\n", jt.field_of_arg2);
 
                 assert( wme2 != NULL );
 
@@ -461,11 +530,11 @@ namespace rete {
                 //printf("function: %p\n", jt.comparator.function);
                 if (!jt.comparator.function(arg1, arg2)) {
                     result.passed = false;
-                    return result;
+                    // return result; // can't short circuit because we need the variables for looking up later
                 }
                 result.vars.push_back(jt.variable);
 
-                //printf("result.passed = %s\n", result.passed ? "true" : "false");
+                printf("result.passed = %s\n", result.passed ? "true" : "false");
 
             } else if (jt.type == join_test::CONSTANT) {
                 result.passed = result.passed && jt.comparator.function(arg1, jt.constant_value);
@@ -599,13 +668,106 @@ namespace rete {
         // TODO: conflict set might have to be cleared here? What's the reason for keeping it as is?
     }
 
+    bool varmap_t_contains_var(varmap_t varmap, var_t var)
+    {
+        if (varmap.has_id && varmap.id_var == var)
+            return true;
+
+        if (varmap.has_attr && varmap.attr_var == var)
+            return true;
+
+        if (varmap.has_value && varmap.value_var == var)
+            return true;
+
+        return false;
+    }
+
+    bool varmap_t_contains_vars(varmap_t varmap, std::vector<var_t> vars)
+    {
+        for (var_t var : vars)
+            if (!varmap_t_contains_var(varmap, var))
+                return false;
+
+        return true;
+    }
+
+    std::vector<varmap_t> filter_varmaps(std::vector<var_t> vars, std::vector<varmap_t> varmaps)
+    {
+        std::vector<varmap_t> result;
+        for (varmap_t varmap : varmaps) {
+            if (varmap_t_contains_vars(varmap, vars))
+                result.push_back(varmap);
+        }
+        return result;
+    }
+
+    mapped_variables_type map_variables(token_t* token)
+    {
+        mapped_variables_type mvars;
+        token_t* parent = token;
+
+        while (parent->parent != NULL) {
+
+            std::vector<varmap_t> filtered = filter_varmaps(token->vars, parent->wme->variables);
+            for (varmap_t varmap : filtered) {
+                if (varmap.has_id) {
+                    mvars[varmap.id_var.name] = value_string(varmap.id.name);
+                }
+
+                if (varmap.has_attr) {
+                    mvars[varmap.attr_var.name] = value_string(varmap.attr.name);
+                }
+
+                if (varmap.has_value) {
+                    mvars[varmap.value_var.name] = varmap.value;
+                }
+            }
+
+            parent = parent->parent;
+        }
+
+        return mvars;
+    }
+
+    void trigger_activated_production_nodes(rete_t* rs)
+    {
+        std::vector<activated_production_node_t> all_activated_pns;
+        for (auto vapn_pair : rs->activated_production_table)
+        {
+            std::vector<activated_production_node_t> vapn = vapn_pair.second;
+            all_activated_pns.insert(all_activated_pns.end(), vapn.begin(), vapn.end());
+        }
+
+        // sort activated_production_node_t by salience
+        std::sort(all_activated_pns.begin(), all_activated_pns.end());
+
+        // clear all previously activated production nodes
+        rs->activated_production_table.clear();
+
+        for (activated_production_node_t apn : all_activated_pns) {
+            token_t* token = apn.token;
+            production_node_t* pn = apn.production_node;
+            rule_action_state_t ras;
+
+            ras.token = token;
+            ras.production_node = pn;
+            ras.rete_state = rs;
+            ras.mapped_variables_table = map_variables(token);
+
+            pn->code(ras);
+        }
+    }
+
     void activate_alpha_nodes_for_wme(rete_t* rs, wme_t* wme, wme::operation::type wme_op)
     {
         printf("[DEBUG] activate_alpha_nodes_for_wme\n");
         wme_t_show(wme);
         for (condition_t& condition : wme_t_derive_conditions_for_lookup(wme)) {
+            printf("[DEBUG] derived condition:\n");
+            condition_t_show(condition);
             alpha_node_t* am = lookup_alpha_memory_for_condition(rs, condition);
             if (am) {
+                printf("FOUND AM TO ACTIVATE %p\n", am);
                 alpha_node_t_activate(rs, am, wme, wme_op);
             }
         }
@@ -680,7 +842,7 @@ namespace rete {
                                                    wme_t* wme,
                                                    wme::operation::type wme_op)
     {
-        //printf("[DEBUG] ================================= left_activate_after_successful_join_tests\n");
+        printf("[DEBUG] ================================= left_activate_after_successful_join_tests\n");
         wme_t_show(wme);
         token_t_show(token);
         join_test_result result = perform_join_tests(jn->join_tests, token, wme);
@@ -916,22 +1078,21 @@ namespace rete {
         delete pn;
     }
 
-    bool equal_f(value_t& x, value_t& y) {
-        printf("\tEQUAL check: %s == %s\n", value_t_show(x).c_str(), value_t_show(y).c_str());
-        return x == y;
+    namespace join_test {
+        bool equal_f(value_t& x, value_t& y)
+        {
+            //printf("\tEQUAL check: %s == %s\n", value_t_show(x).c_str(), value_t_show(y).c_str());
+            return x == y;
+        }
     }
 
     maybe_join_test_t create_default_join_test(int idx, join_test::condition_field field1, var_t var, maybe_var_t earlier_vars)
     {
-        join_test::comparator_t equal;
-        equal.description = "default equality test";
-        equal.function = equal_f;
-
         join_test_t jt;
         jt.type = join_test::DEFAULT;
         jt.field_of_arg1 = field1;
         jt.condition_of_arg2 = idx;
-        jt.comparator = equal;
+        jt.comparator = join_test::equal();
         jt.variable = var;
 
         // TODO: we only support variable in one position, if we want to support the same

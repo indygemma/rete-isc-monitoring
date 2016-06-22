@@ -24,7 +24,7 @@
 
     //rete_t_destroy(r1);
 //}[> }}}<]
-void r1_handler(rete::rete_t* rs) {/* {{{*/
+void r1_handler(rete::rule_action_state_t ras) {/* {{{*/
     printf("hello handler\n");
 }/* }}}*/
 //TEST_CASE( "Add a single rule" ) {[> {{{<]
@@ -150,5 +150,64 @@ TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
     REQUIRE( (rs->token_count == 5) );
 
     // TODO: 2 production node activations
+
+}/* }}}*/
+void assert_z_x_handler(rete::rule_action_state_t ras)/* {{{*/
+{
+    rete::maybe_value_t z = rete::lookup_var(ras, "z");
+    rete::maybe_value_t y = rete::lookup_var(ras, "y");
+    rete::maybe_value_t x = rete::lookup_var(ras, "x");
+
+    REQUIRE( z.has_value );
+    REQUIRE( y.has_value );
+    REQUIRE( x.has_value );
+
+    bool x_matched = strcmp(x.value.as_string, "jack") == 0 || strcmp(x.value.as_string, "jane") == 0;
+    bool z_matched = strcmp(z.value.as_string, "jack") == 0 || strcmp(z.value.as_string, "jane") == 0;
+
+    // var x can be jack or jane
+    REQUIRE( x_matched );
+    // var z can be jack or jane as well
+    REQUIRE( z_matched );
+    // var y should be 25
+    REQUIRE( (y.value.as_int == 25) );
+}/* }}}*/
+TEST_CASE( "Correct Production Nodes are activated" ) {/* {{{*/
+    rete::rule_t r;
+    r.name = "example rule";
+    r.salience = 0;
+
+    rete::condition_t conditions[4] = {
+        rete::condition_t(rete::var("x"), rete::attr("eye-colors"), rete::value_string("blue")),
+        rete::condition_t(rete::var("x"), rete::attr("height"),     rete::value_int(170)),
+        rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("y")),
+        rete::condition_t(rete::var("z"), rete::attr("age"),        rete::var("y"))
+    };
+
+    r.conditions_size = 4;
+    r.conditions = conditions;
+    r.action = assert_z_x_handler;
+
+    // version with adding the rule first
+    rete::rete_t* rs = rete::rete_t_init();
+    rete::add_rule(rs, r);
+    rete::create_wme(rs, "jack", "eye-colors", rete::value_string("blue"));
+    rete::create_wme(rs, "jack", "height", rete::value_int(170));
+    rete::create_wme(rs, "jane", "height", rete::value_int(160));
+    rete::create_wme(rs, "jane", "age",    rete::value_int(25));
+    rete::create_wme(rs, "jack", "age",    rete::value_int(25));
+    REQUIRE( (rete::activated_production_nodes(rs) == 2) );
+    rete::trigger_activated_production_nodes(rs);
+
+    // version with adding the rule last
+    rete::rete_t* rs2 = rete::rete_t_init();
+    rete::create_wme(rs2, "jack", "eye-colors", rete::value_string("blue"));
+    rete::create_wme(rs2, "jack", "height", rete::value_int(170));
+    rete::create_wme(rs2, "jane", "height", rete::value_int(160));
+    rete::create_wme(rs2, "jane", "age",    rete::value_int(25));
+    rete::create_wme(rs2, "jack", "age",    rete::value_int(25));
+    rete::add_rule(rs2, r);
+    REQUIRE( (rete::activated_production_nodes(rs2) == 2) );
+    rete::trigger_activated_production_nodes(rs2);
 
 }/* }}}*/
