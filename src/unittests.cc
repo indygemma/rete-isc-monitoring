@@ -149,7 +149,7 @@ TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
 
     REQUIRE( (rs->token_count == 5) );
 
-    // TODO: 2 production node activations
+    rete::rete_t_destroy(rs);
 
 }/* }}}*/
 void assert_z_x_handler(rete::rule_action_state_t ras)/* {{{*/
@@ -199,6 +199,8 @@ TEST_CASE( "Correct Production Nodes are activated" ) {/* {{{*/
     REQUIRE( (rete::activated_production_nodes(rs) == 2) );
     rete::trigger_activated_production_nodes(rs);
 
+    rete::rete_t_destroy(rs);
+
     // version with adding the rule last
     rete::rete_t* rs2 = rete::rete_t_init();
     rete::create_wme(rs2, "jack", "eye-colors", rete::value_string("blue"));
@@ -209,6 +211,8 @@ TEST_CASE( "Correct Production Nodes are activated" ) {/* {{{*/
     rete::add_rule(rs2, r);
     REQUIRE( (rete::activated_production_nodes(rs2) == 2) );
     rete::trigger_activated_production_nodes(rs2);
+
+    rete::rete_t_destroy(rs2);
 
 }/* }}}*/
 void x_z_comparator(rete::rule_action_state_t ras) {/* {{{*/
@@ -242,15 +246,13 @@ TEST_CASE( "Production Node activation with multiple comparators" ) {/* {{{*/
     r1.name = "rule #1: join ?x & ?z";
     r1.salience = 0;
 
-    rete::join_test::condition_t jtconditions1[2] = {
-        rete::join_test::var_join_t( rete::var("z"), rete::join_test::equal(),     rete::var("x") ),
-        rete::join_test::var_join_t( rete::var("d"), rete::join_test::not_equal(), rete::var("t") )
-    };
-
     rete::condition_t conditions1[3] = {
         rete::condition_t(rete::var("x"), rete::attr("heartrate"),  rete::value_int(80)),
         rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("t")),
-        rete::condition_t(rete::var("z"), rete::attr("age"),        rete::var("d"), jtconditions1, 2),
+        rete::condition_t(rete::var("z"), rete::attr("height"),        rete::var("d"), {
+            rete::join_test::var_join( rete::var("z"), rete::join_test::equal(),     rete::var("x") ),
+            rete::join_test::var_join( rete::var("d"), rete::join_test::not_equal(), rete::var("t") )
+        })
     };
 
     r1.conditions_size = 3;
@@ -261,27 +263,26 @@ TEST_CASE( "Production Node activation with multiple comparators" ) {/* {{{*/
     r2.name = "rule #2: ?x != ?z && ?t < ?d";
     r2.salience = 0;
 
-    rete::join_test::condition_t jtconditions2[2] = {
-        rete::join_test::var_join_t( rete::var("d"), rete::join_test::greater_than(), rete::var("t") ),
-        rete::join_test::var_join_t( rete::var("z"), rete::join_test::not_equal(),    rete::var("x") )
-    };
-
     rete::condition_t conditions2[3] = {
         rete::condition_t(rete::var("x"), rete::attr("bloodtype"), rete::value_string("AB") ),
         rete::condition_t(rete::var("x"), rete::attr("children"),  rete::var("t") ),
-        rete::condition_t(rete::var("z"), rete::attr("siblings"),  rete::var("d"), jtconditions2, 2)
+        rete::condition_t(rete::var("z"), rete::attr("siblings"),  rete::var("d"), {
+            rete::join_test::var_join( rete::var("d"), rete::join_test::greater_than(), rete::var("t") ),
+            rete::join_test::var_join( rete::var("z"), rete::join_test::not_equal(),    rete::var("x") )
+        })
     };
 
     r2.conditions_size = 3;
     r2.conditions = conditions2;
+    r2.action = x_z_t_d_comparator;
 
     rete::rete_t* rs = rete::rete_t_init();
     rete::add_rule(rs, r1);
     rete::add_rule(rs, r2);
 
     rete::create_wme(rs, "daniel", "heartrate", rete::value_int(80));
-    rete::create_wme(rs, "daniel", "height",    rete::value_int(170));
-    rete::create_wme(rs, "daniel", "height",    rete::value_int(160));
+    rete::create_wme(rs, "daniel", "age",       rete::value_int(25));
+    rete::create_wme(rs, "daniel", "height",    rete::value_int(30));
 
     REQUIRE( (rete::activated_production_nodes(rs) == 1)  );
     rete::trigger_activated_production_nodes(rs);
@@ -293,8 +294,11 @@ TEST_CASE( "Production Node activation with multiple comparators" ) {/* {{{*/
     rete::create_wme(rs, "xavier", "siblings",  rete::value_int(2));
 
     // # of activated PNs = 1, because only chavez's WME together with jack's WMEs matches the conditions
+    printf("rete::activated_production_nodes(rs): %d\n", rete::activated_production_nodes(rs));
     REQUIRE( (rete::activated_production_nodes(rs) == 1) );
     rete::trigger_activated_production_nodes(rs);
+
+    rete::rete_t_destroy(rs);
 
 }/* }}}*/
 // TODO testJoinTestsWithStackingVarAndConstTests

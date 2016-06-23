@@ -497,7 +497,7 @@ namespace rete {
                 //printf("function: %p\n", jt.comparator.function);
                 if (!jt.comparator.function(arg1, arg2)) {
                     result.passed = false;
-                    // return result; // can't short circuit because we need the variables for looking up later
+                    return result; // if one fails we can stop
                 }
                 result.vars.push_back(jt.variable);
 
@@ -602,7 +602,7 @@ namespace rete {
      */
     void sync_activated_production_nodes(rete_t* rs)/* {{{*/
     {
-        for (activated_production_node_t& apn : rs->conflict_set) {
+        for (activated_production_node_t apn : rs->conflict_set) {
             switch (apn.wme_op) {
                 case wme::operation::ADD: {
                     token_key_t key = token_key_t(apn.token);
@@ -625,7 +625,7 @@ namespace rete {
             }
         }
 
-        // TODO: conflict set might have to be cleared here? What's the reason for keeping it as is?
+        rs->conflict_set.clear();
     }/* }}}*/
     bool varmap_t_contains_var(varmap_t varmap, var_t var)/* {{{*/
     {
@@ -664,7 +664,7 @@ namespace rete {
 
         while (parent->parent != NULL) {
 
-            std::vector<varmap_t> filtered = filter_varmaps(token->vars, parent->wme->variables);
+            std::vector<varmap_t> filtered = filter_varmaps(parent->vars, parent->wme->variables);
             for (varmap_t varmap : filtered) {
                 if (varmap.has_id) {
                     mvars[varmap.id_var.name] = value_string(varmap.id.name);
@@ -866,13 +866,15 @@ namespace rete {
                     bn->parent_join_node->beta_memories->size());
             for (beta_node_t* bn2 : *bn->parent_join_node->beta_memories)
                 printf("%p\n", bn2);
+
+            delete tmp_children;
         }
     }/* }}}*/
     wme_t* wme_t_init(rete_t* rs, const char* id, const char* attr, value_t& val)/* {{{*/
     {
         wme_t* wme = new wme_t();
-        wme->identifier = (char*)malloc(strlen(id));
-        wme->attribute = (char*)malloc(strlen(attr));
+        wme->identifier = (char*)malloc(strlen(id)+1);
+        wme->attribute = (char*)malloc(strlen(attr)+1);
         strcpy(wme->identifier, id);
         strcpy(wme->attribute, attr);
         wme->value = val;
@@ -1009,8 +1011,11 @@ namespace rete {
 
         return new_pn;
     }/* }}}*/
-    void production_node_t_destroy(production_node_t* pn)/* {{{*/
+    void production_node_t_destroy(rete_t* rs, production_node_t* pn)/* {{{*/
     {
+        for (token_t* token : pn->tokens)
+            token_t_destroy(rs, token);
+
         delete pn;
     }/* }}}*/
     namespace join_test {/* {{{*/
@@ -1054,6 +1059,22 @@ namespace rete {
             return false;
         }
 
+        condition_t var_join(var_t var1, comparator_t comparator, var_t var2) {/* {{{*/
+            condition_t c;
+            c.var1 = var1;
+            c.comparator = comparator;
+            c.var2 = var2;
+            c.t = VARIABLE;
+            return c;
+        }/* }}}*/
+        condition_t const_join(var_t var, comparator_t comparator, value_t val) {/* {{{*/
+            condition_t c;
+            c.var1 = var;
+            c.comparator = comparator;
+            c.val = val;
+            c.t = CONSTANT;
+            return c;
+        }/* }}}*/
     }/* }}}*/
     maybe_join_test_t create_default_join_test(int idx, join_test::condition_field field1, var_t var, maybe_var_t earlier_vars)/* {{{*/
     {
@@ -1102,30 +1123,103 @@ namespace rete {
 
         return mjt;
     }/* }}}*/
-    std::vector<join_test_t> create_default_join_tests(int idx, maybe_var_t current_vars, maybe_var_t earlier_vars)/* {{{*/
+    maybe_join_test_t create_variable_join_test(int idx, join_test::condition_field field1, var_t var, maybe_var_t earlier_vars, join_test::condition_t jtc)/* {{{*/
+    {
+        // assumes that variable join tests are at the level of condition where both variables occur.
+        // We will not look further past the current condition to find the variables.
+
+        maybe_join_test_t mjt;
+
+        if (jtc.t != join_test::VARIABLE) {
+            mjt.has_join_test = false;
+            return mjt;
+        }
+
+        join_test_t jt;
+        jt.type = join_test::VARIABLE;
+        jt.field_of_arg1 = field1;
+        jt.condition_of_arg2 = idx;
+        jt.comparator = jtc.comparator;
+        jt.variable = jtc.var1;
+
+        // TODO: we only support variable in one position, if we want to support the same
+        // variable in many fields in the same condition then we need to add more join tests.
+
+        mjt.has_join_test = false;
+        if (var == jtc.var1) {
+
+            if (earlier_vars.has_id && earlier_vars.id_var == jtc.var2) {
+                jt.field_of_arg2 = join_test::IDENTIFIER;
+                printf("IDENTIFIER chosen\n");
+                mjt.has_join_test = true;
+            } else if (earlier_vars.has_attr && earlier_vars.attr_var == jtc.var2) {
+                jt.field_of_arg2 = join_test::ATTRIBUTE;
+                printf("ATTRIBUTE chosen\n");
+                mjt.has_join_test = true;
+            } else if (earlier_vars.has_value && earlier_vars.value_var == jtc.var2) {
+                jt.field_of_arg2 = join_test::VALUE;
+                printf("VALUE chosen\n");
+                mjt.has_join_test = true;
+            }
+
+        }
+
+        mjt.join_test = jt;
+
+        if (mjt.has_join_test)
+            printf("\tCREATED variable join test. condition_of_arg2: %d. field_of_arg2: %d\n", jt.condition_of_arg2, jt.field_of_arg2);
+        else
+            printf("\tDid not create join test\n");
+
+        return mjt;
+    }/* }}}*/
+    std::vector<join_test_t> create_join_tests(int idx, maybe_var_t current_vars, maybe_var_t earlier_vars, std::vector<join_test::condition_t> join_test_conditions)/* {{{*/
     {
         std::vector<join_test_t> jts;
 
         if (current_vars.has_id) {
 
-            maybe_join_test_t mjt = create_default_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, earlier_vars);
-            if (mjt.has_join_test)
-                jts.push_back(mjt.join_test);
-            // TODO: custom join tests with extra join test info
+            // default common variable binding test
+            maybe_join_test_t mdjt = create_default_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, earlier_vars);
+            if (mdjt.has_join_test)
+                jts.push_back(mdjt.join_test);
+
+            // custom variable join test
+            for (join_test::condition_t& jtc : join_test_conditions) {
+                maybe_join_test_t mvjt = create_variable_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, earlier_vars, jtc);
+                if (mvjt.has_join_test)
+                    jts.push_back(mvjt.join_test);
+            }
         }
 
         if (current_vars.has_attr) {
+
+            // default common variable binding test
             maybe_join_test_t mjt = create_default_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, earlier_vars);
             if (mjt.has_join_test)
                 jts.push_back(mjt.join_test);
-            // TODO: custom join tests with extra join test info
+
+            // custom variable join test
+            for (join_test::condition_t& jtc : join_test_conditions) {
+                maybe_join_test_t mvjt = create_variable_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, earlier_vars, jtc);
+                if (mvjt.has_join_test)
+                    jts.push_back(mvjt.join_test);
+            }
         }
 
         if (current_vars.has_value) {
+
+            // default common variable binding test
             maybe_join_test_t mjt = create_default_join_test(idx, join_test::VALUE, current_vars.value_var, earlier_vars);
             if (mjt.has_join_test)
                 jts.push_back(mjt.join_test);
-            // TODO: custom join tests with extra join test info
+
+            // custom variable join test
+            for (join_test::condition_t& jtc : join_test_conditions) {
+                maybe_join_test_t mvjt = create_variable_join_test(idx, join_test::VALUE, current_vars.value_var, earlier_vars, jtc);
+                if (mvjt.has_join_test)
+                    jts.push_back(mvjt.join_test);
+            }
         }
 
         return jts;
@@ -1135,8 +1229,7 @@ namespace rete {
         std::set<int> hashes;
         std::vector<join_test_t> final_join_tests;
         for (join_test_t jt : join_tests) {
-            // TODO: have to hash different join test types
-            int hash = jt.field_of_arg1;
+            size_t hash = join_test_hasher()(jt);
             auto search = hashes.find(hash);
             if (search == hashes.end()) {
                 // does not exist
@@ -1144,7 +1237,7 @@ namespace rete {
                 hashes.insert(hash);
             }
         }
-        return join_tests;
+        return final_join_tests;
     }/* }}}*/
     std::vector<join_test_t> condition_t_get_join_tests(condition_t& condition, std::deque<condition_t> earlier_conditions)/* {{{*/
     {
@@ -1160,10 +1253,11 @@ namespace rete {
             condition_t_show(condition);
             condition_t_show(earlier_condition);
             maybe_var_t earlier_vars = condition_t_find_variables(earlier_condition);
-            // TODO: missing extra join test infos
-            std::vector<join_test_t> join_tests = create_default_join_tests(idx, current_vars, earlier_vars);
-            // TODO: add to beginning or end???
-            all_join_tests.insert(all_join_tests.end(), join_tests.begin(), join_tests.end());
+
+            // setup join tests
+            std::vector<join_test_t> default_join_tests = create_join_tests(idx, current_vars, earlier_vars, condition.join_test_conditions);
+            all_join_tests.insert(all_join_tests.end(), default_join_tests.begin(), default_join_tests.end());
+
             idx++;
         }
 
@@ -1242,8 +1336,15 @@ namespace rete {
 
         return bm;
     }/* }}}*/
-    void beta_node_t_destroy(beta_node_t* bm)/* {{{*/
+    void beta_node_t_destroy(rete_t* rs, beta_node_t* bm)/* {{{*/
     {
+        // destroy tokens
+        for (token_t* token : bm->tokens)
+            token_t_destroy(rs, token);
+
+        for (join_node_t* jn : bm->join_nodes)
+            join_node_t_destroy(rs, jn);
+
         delete bm;
     }/* }}}*/
     join_node_t* join_node_t_init(beta_node_t* bm, alpha_node_t* am, std::vector<join_test_t> jts)/* {{{*/
@@ -1267,9 +1368,16 @@ namespace rete {
     {
         jn->production_node = pn;
     }/* }}}*/
-    void join_node_t_destroy(join_node_t* jn)/* {{{*/
+    void join_node_t_destroy(rete_t* rs, join_node_t* jn)/* {{{*/
     {
-        // TODO: delete individual beta nodes
+        // clean beta memories
+        for (beta_node_t* bn : *jn->beta_memories)
+            beta_node_t_destroy(rs, bn);
+
+        // clean production node
+        if (jn->production_node)
+            production_node_t_destroy(rs, jn->production_node);
+
         delete jn->beta_memories;
         delete jn;
     }/* }}}*/
@@ -1343,13 +1451,16 @@ namespace rete {
     }/* }}}*/
     void rete_t_destroy(rete_t* rs)/* {{{*/
     {
-        for (token_t* token : rs->root_beta_node->tokens)
-            token_t_destroy(rs, token);
-        beta_node_t_destroy(rs->root_beta_node);
-        // TODO: destroy all beta memory nodes
-        // TODO: destroy all join nodes
-        // TODO: destroy all production nodes
-        // TODO: destroy all alpha nodes
+        // from the root beta node, delete all tokens, then traverse down the network to seuentially delete instances
+        beta_node_t_destroy(rs, rs->root_beta_node);
+
+        // clean up the alpha network
+        for (auto pcam : rs->alpha_network)
+            alpha_node_t_destroy(pcam.second);
+
+        for (auto pkwme : rs->wme_table)
+            wme_t_destroy(rs, pkwme.second);
+
         delete rs;
     }/* }}}*/
 

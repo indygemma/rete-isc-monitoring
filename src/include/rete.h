@@ -141,13 +141,13 @@ namespace rete {
 
         struct equal : comparator_t {/* {{{*/
             equal() {
-                description = "default equality test";
+                description = "equality test";
                 function = equal_f;
             }
         };/* }}}*/
         struct not_equal : comparator_t {/* {{{*/
             not_equal() {
-                description = "default non-equality test";
+                description = "non-equality test";
                 function = not_equal_f;
             }
         };/* }}}*/
@@ -160,33 +160,14 @@ namespace rete {
         const char* show_condition_field(condition_field&);
 
         struct condition_t {/* {{{*/
-
-        };/* }}}*/
-        struct var_join_t : condition_t {/* {{{*/
-            var_join_t(var_t var1, comparator_t comparator, var_t var2)
-            {
-                var1 = var1;
-                comparator = comparator;
-                var2 = var2;
-            }
-
+            type t;
             var_t var1;
             var_t var2;
+            value_t val;
             comparator_t comparator;
         };/* }}}*/
-        struct const_join_t : condition_t {/* {{{*/
-            const_join_t(var_t var, comparator_t comparator, value_t val)
-            {
-                var = var;
-                comparator = comparator;
-                value = val;
-            }
-
-            var_t var;
-            value_t value;
-            comparator_t comparator;
-        };/* }}}*/
-
+        condition_t var_join(var_t var1, comparator_t comparator, var_t var2);
+        condition_t const_join(var_t var, comparator_t comparator, value_t val);
     }/* }}}*/
     class condition_t {/* {{{*/
 
@@ -201,17 +182,6 @@ namespace rete {
                 identifier_is_constant = false;
                 attribute_is_constant = false;
                 value_is_constant = false;
-            }/* }}}*/
-            // ??? with join tests
-            condition_t(var_t id, var_t attr, var_t value, join_test::condition_t* jts, int n) {/* {{{*/
-                identifier_as_var = id;
-                attribute_as_var = attr;
-                value_as_var = value;
-
-                identifier_is_constant = false;
-                attribute_is_constant = false;
-                value_is_constant = false;
-                copy_conditions(jts, n);
             }/* }}}*/
             // 2) x??
             condition_t(id_t id, var_t attr, var_t value)/* {{{*/
@@ -246,6 +216,20 @@ namespace rete {
                 attribute_is_constant = true;
                 value_is_constant = false;
                 copy_conditions(jts, n);
+            }/* }}}*/
+
+            condition_t(var_t id, attr_t attr, var_t value, std::vector<join_test::condition_t> jts)/* {{{*/
+            {
+                identifier_as_var = id;
+                attribute_as_val = attr;
+                value_as_var = value;
+
+                identifier_is_constant = false;
+                attribute_is_constant = true;
+                value_is_constant = false;
+
+                for (join_test::condition_t c : jts)
+                    join_test_conditions.push_back(c);
             }/* }}}*/
 
             // 4) ??z
@@ -695,6 +679,33 @@ namespace rete {
             return true;
         }
     };/* }}}*/
+    struct join_test_hasher/* {{{*/
+    {
+        std::size_t operator()(const join_test_t& k) const
+        {
+            using std::size_t;
+            using std::hash;
+            using std::string;
+            std::size_t seed = 0;
+
+            seed = hash_combine(seed, hash<int>()(k.field_of_arg1));
+
+            if (k.type == join_test::DEFAULT)
+            {
+                return seed;
+            } else if (k.type == join_test::VARIABLE) {
+                seed = hash_combine(seed, hash<int>()(k.condition_of_arg2));
+                seed = hash_combine(seed, hash<int>()(k.field_of_arg2));
+                seed = hash_combine(seed, hash<string>()(k.comparator.description));
+                return seed;
+            } else if (k.type == join_test::CONSTANT) {
+                seed = hash_combine(seed, hash<string>()(k.comparator.description));
+                seed = hash_combine(seed, value_t_hash(k.constant_value));
+                return seed;
+            }
+
+        }
+    };/* }}}*/
 
     struct maybe_join_test_t {/* {{{*/
         bool has_join_test;
@@ -803,7 +814,7 @@ namespace rete {
     void join_node_t_add_production_node(join_node_t*, production_node_t*);
     void join_node_t_left_activate(rete_t*, join_node_t*, token_t*, wme::operation::type);
     void join_node_t_right_activate(rete_t*, join_node_t*, wme_t*, wme::operation::type);
-    void join_node_t_destroy(join_node_t*);/* }}}*/
+    void join_node_t_destroy(rete_t*, join_node_t*);/* }}}*/
     // ALPHA NODE functions/* {{{*/
     alpha_node_t* alpha_node_t_init();
     void alpha_node_t_add_join_node(alpha_node_t*, join_node_t*);
@@ -820,7 +831,7 @@ namespace rete {
     void beta_node_t_add_join_node(beta_node_t*, join_node_t*);
     void beta_node_t_add_token(beta_node_t*, token_t*);
     void beta_node_t_remove_token(beta_node_t*, token_t*);
-    void beta_node_t_destroy(beta_node_t*);/* }}}*/
+    void beta_node_t_destroy(rete_t*, beta_node_t*);/* }}}*/
     // JOIN TESTS functions/* {{{*/
     bool join_tests_equal(std::vector<join_test_t>, std::vector<join_test_t>);/* }}}*/
     // PRODUCTION NODE functions/* {{{*/
@@ -829,7 +840,7 @@ namespace rete {
                                          std::vector<var_t>, wme::operation::type);
     void production_node_t_add_token(production_node_t*, token_t*);
     void production_node_t_remove_token(production_node_t*, token_t*);
-    void production_node_t_destroy(production_node_t*);/* }}}*/
+    void production_node_t_destroy(rete_t*, production_node_t*);/* }}}*/
     // TOKEN functions/* {{{*/
     token_t* token_t_init(rete_t*, token_t*, wme_t*, std::vector<var_t>);
     void token_t_destroy(rete_t*, token_t*);/* }}}*/
