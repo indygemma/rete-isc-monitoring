@@ -504,8 +504,12 @@ namespace rete {
                 printf("result.passed = %s\n", result.passed ? "true" : "false");
 
             } else if (jt.type == join_test::CONSTANT) {
-                result.passed = result.passed && jt.comparator.function(arg1, jt.constant_value);
+                if (!jt.comparator.function(arg1, jt.constant_value)) {
+                    result.passed = false;
+                    return result;
+                }
                 result.vars.push_back(jt.variable);
+                printf("constant join test result.passed = %s\n", result.passed ? "true" : "false");
             }
         }
 
@@ -708,6 +712,8 @@ namespace rete {
             ras.production_node = pn;
             ras.rete_state = rs;
             ras.mapped_variables_table = map_variables(token);
+
+            assert( pn->code != NULL );
 
             pn->code(ras);
         }
@@ -1173,52 +1179,125 @@ namespace rete {
 
         return mjt;
     }/* }}}*/
+    maybe_join_test_t create_constant_join_test(int idx, join_test::condition_field field1, var_t var, maybe_var_t earlier_vars, join_test::condition_t jtc)/* {{{*/
+    {
+        // assumes that constant join tests are at the level of condition where both variables occur.
+        // We will not look further past the current condition to find the variables.
+
+        maybe_join_test_t mjt;
+
+        if (jtc.t != join_test::CONSTANT) {
+            mjt.has_join_test = false;
+            return mjt;
+        }
+
+        join_test_t jt;
+        jt.type = join_test::CONSTANT;
+        jt.field_of_arg1 = field1;
+        jt.comparator = jtc.comparator;
+        jt.variable = jtc.var1;
+        jt.constant_value = jtc.val;
+
+        mjt.has_join_test = false;
+        if (var == jtc.var1) {
+            mjt.has_join_test = true;
+        }
+
+        mjt.join_test = jt;
+
+        if (mjt.has_join_test)
+            printf("\tCREATED constant join test\n");
+        else
+            printf("\tDid not create constant join test\n");
+
+        return mjt;
+    }/* }}}*/
+    std::vector<join_test_t> create_join_tests_helper(int idx, join_test::condition_field field1, var_t var, maybe_var_t earlier_vars, /* {{{*/
+                                                      std::vector<join_test::condition_t> join_test_conditions)
+    {
+        // TODO: using
+        std::vector<join_test_t> result;
+
+        // default common variable binding test
+        maybe_join_test_t mdjt = create_default_join_test(idx, field1, var, earlier_vars);
+        if (mdjt.has_join_test)
+            result.push_back(mdjt.join_test);
+
+        for (join_test::condition_t& jtc : join_test_conditions) {
+            // custom variable join test
+            maybe_join_test_t mvjt = create_variable_join_test(idx, field1, var, earlier_vars, jtc);
+            if (mvjt.has_join_test)
+                result.push_back(mvjt.join_test);
+
+            // constant join test
+            maybe_join_test_t mcjt = create_constant_join_test(idx, field1, var, earlier_vars, jtc);
+            if (mcjt.has_join_test)
+                result.push_back(mcjt.join_test);
+        }
+
+        return result;
+    }/* }}}*/
     std::vector<join_test_t> create_join_tests(int idx, maybe_var_t current_vars, maybe_var_t earlier_vars, std::vector<join_test::condition_t> join_test_conditions)/* {{{*/
     {
         std::vector<join_test_t> jts;
+        bool has_value = false;
 
         if (current_vars.has_id) {
-
             // default common variable binding test
             maybe_join_test_t mdjt = create_default_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, earlier_vars);
             if (mdjt.has_join_test)
                 jts.push_back(mdjt.join_test);
 
-            // custom variable join test
             for (join_test::condition_t& jtc : join_test_conditions) {
+                // custom variable join test
                 maybe_join_test_t mvjt = create_variable_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, earlier_vars, jtc);
                 if (mvjt.has_join_test)
                     jts.push_back(mvjt.join_test);
+
+                // constant join test
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, earlier_vars, jtc);
+                if (mcjt.has_join_test)
+                    jts.push_back(mcjt.join_test);
             }
         }
 
         if (current_vars.has_attr) {
-
             // default common variable binding test
-            maybe_join_test_t mjt = create_default_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, earlier_vars);
-            if (mjt.has_join_test)
-                jts.push_back(mjt.join_test);
+            maybe_join_test_t mdjt = create_default_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, earlier_vars);
+            if (mdjt.has_join_test)
+                jts.push_back(mdjt.join_test);
 
-            // custom variable join test
             for (join_test::condition_t& jtc : join_test_conditions) {
+                // custom variable join test
                 maybe_join_test_t mvjt = create_variable_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, earlier_vars, jtc);
                 if (mvjt.has_join_test)
                     jts.push_back(mvjt.join_test);
+
+                // constant join test
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, earlier_vars, jtc);
+                if (mcjt.has_join_test)
+                    jts.push_back(mcjt.join_test);
             }
         }
 
         if (current_vars.has_value) {
-
             // default common variable binding test
-            maybe_join_test_t mjt = create_default_join_test(idx, join_test::VALUE, current_vars.value_var, earlier_vars);
-            if (mjt.has_join_test)
-                jts.push_back(mjt.join_test);
+            maybe_join_test_t mdjt = create_default_join_test(idx, join_test::VALUE, current_vars.value_var, earlier_vars);
+            if (mdjt.has_join_test)
+                jts.push_back(mdjt.join_test);
 
-            // custom variable join test
             for (join_test::condition_t& jtc : join_test_conditions) {
+                // custom variable join test
                 maybe_join_test_t mvjt = create_variable_join_test(idx, join_test::VALUE, current_vars.value_var, earlier_vars, jtc);
                 if (mvjt.has_join_test)
                     jts.push_back(mvjt.join_test);
+
+                // constant join test
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::VALUE, current_vars.value_var, earlier_vars, jtc);
+                if (mcjt.has_join_test) {
+                    jts.push_back(mcjt.join_test);
+                    has_value = true;
+                }
             }
         }
 

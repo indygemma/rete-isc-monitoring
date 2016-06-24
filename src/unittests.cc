@@ -242,66 +242,135 @@ void x_z_t_d_comparator(rete::rule_action_state_t ras) {/* {{{*/
     REQUIRE( t_smaller_d );
 }/* }}}*/
 TEST_CASE( "Production Node activation with multiple comparators" ) {/* {{{*/
+rete::rule_t r1;
+r1.name = "rule #1: join ?x & ?z";
+r1.salience = 0;
+
+rete::condition_t conditions1[3] = {
+    rete::condition_t(rete::var("x"), rete::attr("heartrate"),  rete::value_int(80)),
+    rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("t")),
+    rete::condition_t(rete::var("z"), rete::attr("height"),        rete::var("d"), {
+        rete::join_test::var_join( rete::var("z"), rete::join_test::equal(),     rete::var("x") ),
+        rete::join_test::var_join( rete::var("d"), rete::join_test::not_equal(), rete::var("t") )
+    })
+};
+
+r1.conditions_size = 3;
+r1.conditions = conditions1;
+r1.action = x_z_comparator;
+
+rete::rule_t r2;
+r2.name = "rule #2: ?x != ?z && ?t < ?d";
+r2.salience = 0;
+
+rete::condition_t conditions2[3] = {
+    rete::condition_t(rete::var("x"), rete::attr("bloodtype"), rete::value_string("AB") ),
+    rete::condition_t(rete::var("x"), rete::attr("children"),  rete::var("t") ),
+    rete::condition_t(rete::var("z"), rete::attr("siblings"),  rete::var("d"), {
+        rete::join_test::var_join( rete::var("d"), rete::join_test::greater_than(), rete::var("t") ),
+        rete::join_test::var_join( rete::var("z"), rete::join_test::not_equal(),    rete::var("x") )
+    })
+};
+
+r2.conditions_size = 3;
+r2.conditions = conditions2;
+r2.action = x_z_t_d_comparator;
+
+rete::rete_t* rs = rete::rete_t_init();
+rete::add_rule(rs, r1);
+rete::add_rule(rs, r2);
+
+rete::create_wme(rs, "daniel", "heartrate", rete::value_int(80));
+rete::create_wme(rs, "daniel", "age",       rete::value_int(25));
+rete::create_wme(rs, "daniel", "height",    rete::value_int(30));
+
+REQUIRE( (rete::activated_production_nodes(rs) == 1)  );
+rete::trigger_activated_production_nodes(rs);
+REQUIRE( (rete::activated_production_nodes(rs) == 0)  );
+
+rete::create_wme(rs, "jack",   "bloodtype", rete::value_string("AB"));
+rete::create_wme(rs, "jack",   "children",  rete::value_int(3));
+rete::create_wme(rs, "chavez", "siblings",  rete::value_int(4));
+rete::create_wme(rs, "xavier", "siblings",  rete::value_int(2));
+
+// # of activated PNs = 1, because only chavez's WME together with jack's WMEs matches the conditions
+printf("rete::activated_production_nodes(rs): %d\n", rete::activated_production_nodes(rs));
+REQUIRE( (rete::activated_production_nodes(rs) == 1) );
+rete::trigger_activated_production_nodes(rs);
+
+rete::rete_t_destroy(rs);
+
+}/* }}}*/
+TEST_CASE( "Join Tests with stacking variable and constant tests" ) {/* {{{*/
     rete::rule_t r1;
-    r1.name = "rule #1: join ?x & ?z";
+    r1.name = "find solution";
     r1.salience = 0;
 
-    rete::condition_t conditions1[3] = {
-        rete::condition_t(rete::var("x"), rete::attr("heartrate"),  rete::value_int(80)),
-        rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("t")),
-        rete::condition_t(rete::var("z"), rete::attr("height"),        rete::var("d"), {
-            rete::join_test::var_join( rete::var("z"), rete::join_test::equal(),     rete::var("x") ),
-            rete::join_test::var_join( rete::var("d"), rete::join_test::not_equal(), rete::var("t") )
+    rete::condition_t conditions[9] = {
+        rete::condition_t(rete::var("fred"), rete::attr("name"),     rete::value_string("Fred")),
+        rete::condition_t(rete::var("fred"), rete::attr("position"), rete::var("fred_position")),
+        rete::condition_t(rete::var("fred"), rete::attr("color"),    rete::var("fred_color")),
+
+        rete::condition_t(rete::var("joe"),  rete::attr("name"),     rete::value_string("Joe")),
+        rete::condition_t(rete::var("joe"),  rete::attr("position"), rete::var("joe_position"), {
+            rete::join_test::const_join( rete::var("joe_position"), rete::join_test::equal(),     rete::value_int(2) ),
+            rete::join_test::var_join(   rete::var("joe_position"), rete::join_test::not_equal(), rete::var("fred_position") )
+        }),
+        rete::condition_t(rete::var("joe"), rete::attr("color"), rete::var("joe_color"), {
+            rete::join_test::var_join( rete::var("joe_color"), rete::join_test::not_equal(), rete::var("fred_color") )
+        }),
+
+        rete::condition_t(rete::var("bob"), rete::attr("name"),     rete::value_string("Bob")),
+        rete::condition_t(rete::var("bob"), rete::attr("position"), rete::var("bob_position"), {
+            rete::join_test::var_join( rete::var("bob_position"), rete::join_test::not_equal(), rete::var("fred_position") ),
+            rete::join_test::var_join( rete::var("bob_position"), rete::join_test::not_equal(), rete::var("joe_position") )
+        }),
+        rete::condition_t(rete::var("bob"), rete::attr("color"), rete::var("bob_color"), {
+            rete::join_test::const_join( rete::var("bob_color"), rete::join_test::equal(),     rete::value_string("plaid") ),
+            rete::join_test::var_join(   rete::var("bob_color"), rete::join_test::not_equal(), rete::var("fred_color") ),
+            rete::join_test::var_join(   rete::var("bob_color"), rete::join_test::not_equal(), rete::var("joe_color") )
         })
     };
 
-    r1.conditions_size = 3;
-    r1.conditions = conditions1;
-    r1.action = x_z_comparator;
-
-    rete::rule_t r2;
-    r2.name = "rule #2: ?x != ?z && ?t < ?d";
-    r2.salience = 0;
-
-    rete::condition_t conditions2[3] = {
-        rete::condition_t(rete::var("x"), rete::attr("bloodtype"), rete::value_string("AB") ),
-        rete::condition_t(rete::var("x"), rete::attr("children"),  rete::var("t") ),
-        rete::condition_t(rete::var("z"), rete::attr("siblings"),  rete::var("d"), {
-            rete::join_test::var_join( rete::var("d"), rete::join_test::greater_than(), rete::var("t") ),
-            rete::join_test::var_join( rete::var("z"), rete::join_test::not_equal(),    rete::var("x") )
-        })
-    };
-
-    r2.conditions_size = 3;
-    r2.conditions = conditions2;
-    r2.action = x_z_t_d_comparator;
+    r1.conditions_size = 9;
+    r1.conditions = conditions;
+    r1.action = r1_handler;
 
     rete::rete_t* rs = rete::rete_t_init();
     rete::add_rule(rs, r1);
-    rete::add_rule(rs, r2);
 
-    rete::create_wme(rs, "daniel", "heartrate", rete::value_int(80));
-    rete::create_wme(rs, "daniel", "age",       rete::value_int(25));
-    rete::create_wme(rs, "daniel", "height",    rete::value_int(30));
+    rete::create_wme(rs, "Fred", "name",     rete::value_string("Fred"));
+    rete::create_wme(rs, "Fred", "position", rete::value_int(3));
+    rete::create_wme(rs, "Fred", "color",    rete::value_string("orange"));
 
-    REQUIRE( (rete::activated_production_nodes(rs) == 1)  );
-    rete::trigger_activated_production_nodes(rs);
+    rete::create_wme(rs, "Joe", "name",     rete::value_string("Joe"));
+    rete::create_wme(rs, "Joe", "position", rete::value_int(2));
+    rete::create_wme(rs, "Joe", "color",    rete::value_string("red"));
+
+    rete::create_wme(rs, "Bob", "name",     rete::value_string("Bob"));
+    rete::create_wme(rs, "Bob", "position", rete::value_int(3));
+    rete::create_wme(rs, "Bob", "color",    rete::value_string("orange"));
+
+    // no matches because bob.position == fred.position
     REQUIRE( (rete::activated_production_nodes(rs) == 0)  );
 
-    rete::create_wme(rs, "jack",   "bloodtype", rete::value_string("AB"));
-    rete::create_wme(rs, "jack",   "children",  rete::value_int(3));
-    rete::create_wme(rs, "chavez", "siblings",  rete::value_int(4));
-    rete::create_wme(rs, "xavier", "siblings",  rete::value_int(2));
+    rete::create_wme(rs, "Bob", "position", rete::value_int(4));
 
-    // # of activated PNs = 1, because only chavez's WME together with jack's WMEs matches the conditions
-    printf("rete::activated_production_nodes(rs): %d\n", rete::activated_production_nodes(rs));
+    // now bob.position != fred.position != joe.position, thus activate
+    // and bob.color != fred.color != joe.color
+    // and joe.position == 2
+    // BUT bob.color != "plaid"
+    printf( "activated_production_nodes: %d\n", rete::activated_production_nodes(rs) );
+    REQUIRE( (rete::activated_production_nodes(rs) == 0) );
+
+    rete::create_wme(rs, "Bob", "color", rete::value_string("plaid") );
+
+    // now bob.color == "plaid". should trigger production node
     REQUIRE( (rete::activated_production_nodes(rs) == 1) );
-    rete::trigger_activated_production_nodes(rs);
 
     rete::rete_t_destroy(rs);
 
 }/* }}}*/
-// TODO testJoinTestsWithStackingVarAndConstTests
 // TODO testAddSameConditions
 // TODO testSingleVarBindingFromJoinTestFromConditions
 // TODO testMultipleVarBindingFromJoinTestFromConditions
