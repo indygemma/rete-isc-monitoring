@@ -2,106 +2,106 @@
 #include "include/doctest.h"
 #include "include/rete.h"
 
-//TEST_CASE( "Adding a condition to alpha memory" ) {[> {{{<]
-    //rete::condition_t c1(rete::var("test"), rete::var("x"), rete::value_string("lol1"));
+TEST_CASE( "Adding a condition to alpha memory" ) {/* {{{*/
+    rete::condition_t c1(rete::var("test"), rete::var("x"), rete::value_string("lol1"));
 
-    //rete::rete_t* r1 = rete::rete_t_init();
-    //rete::add_condition(r1, c1);
+    rete::rete_t* r1 = rete::rete_t_init();
+    rete::add_condition(r1, c1);
 
-    //REQUIRE( (r1->alpha_memory_count == 1) );
+    REQUIRE( (r1->alpha_memory_count == 1) );
 
-    //rete_t_destroy(r1);
-//}[> }}}<]
-//TEST_CASE( "Adding two seperate conditions to alpha memory" ) {[> {{{<]
-    //rete::condition_t c1(rete::var("test"), rete::var("x"),     rete::value_string("lol2"));
-    //rete::condition_t c2(rete::var("test"), rete::attr("name"), rete::value_string("lol3"));
+    rete_t_destroy(r1);
+}/* }}}*/
+TEST_CASE( "Adding two seperate conditions to alpha memory" ) {/* {{{*/
+    rete::condition_t c1(rete::var("test"), rete::var("x"),     rete::value_string("lol2"));
+    rete::condition_t c2(rete::var("test"), rete::attr("name"), rete::value_string("lol3"));
 
-    //rete::rete_t* r1 = rete::rete_t_init();
-    //rete::add_condition(r1, c1);
-    //rete::add_condition(r1, c2);
+    rete::rete_t* r1 = rete::rete_t_init();
+    rete::add_condition(r1, c1);
+    rete::add_condition(r1, c2);
 
-    //REQUIRE( (r1->alpha_memory_count == 2) );
+    REQUIRE( (r1->alpha_memory_count == 2) );
 
-    //rete_t_destroy(r1);
-//}[> }}}<]
+    rete_t_destroy(r1);
+}/* }}}*/
 void r1_handler(rete::rule_action_state_t ras) {/* {{{*/
     printf("hello handler\n");
 }/* }}}*/
-//TEST_CASE( "Add a single rule" ) {[> {{{<]
-    //rete::rule_t r1;
-    //r1.name = "simple rule";
-    //r1.salience = 0;
+TEST_CASE( "Add a single rule" ) {/* {{{*/
+    rete::rule_t r1;
+    r1.name = "simple rule";
+    r1.salience = 0;
 
-    //rete::condition_t conditions[2] = {
-        //rete::condition_t(rete::var("test"), rete::var("x"),     rete::value_string("lol4")),
-        //rete::condition_t(rete::var("test"), rete::attr("name"), rete::value_string("lol5"))
-    //};
+    rete::condition_t conditions[2] = {
+        rete::condition_t(rete::var("test"), rete::var("x"),     rete::value_string("lol4")),
+        rete::condition_t(rete::var("test"), rete::attr("name"), rete::value_string("lol5"))
+    };
 
-    //r1.conditions_size = 2;
-    //r1.conditions = (rete::condition_t*)malloc(sizeof(rete::condition_t) * 2);
-    ////r1.conditions[0] = rete::condition_t(rete::var("test"), rete::var("x"),     rete::value_string("lol"));
-    ////r1.conditions[1] = rete::condition_t(rete::var("test"), rete::attr("name"), rete::value_string("lol"));
-    //r1.conditions = conditions;
-    //r1.action = r1_handler;
+    r1.conditions_size = 2;
+    r1.conditions = (rete::condition_t*)malloc(sizeof(rete::condition_t) * 2);
+    //r1.conditions[0] = rete::condition_t(rete::var("test"), rete::var("x"),     rete::value_string("lol"));
+    //r1.conditions[1] = rete::condition_t(rete::var("test"), rete::attr("name"), rete::value_string("lol"));
+    r1.conditions = conditions;
+    r1.action = r1_handler;
 
-    //rete::rete_t* rs1 = rete::rete_t_init();
-    //rete::add_rule(rs1, r1);
+    rete::rete_t* rs1 = rete::rete_t_init();
+    rete::add_rule(rs1, r1);
 
-    //// (1): var:?test, var:?x,   val:lol
-    //// (2): var:?test, val:name, val:lol
-    //REQUIRE( (rs1->alpha_memory_count == 2) );
-    //// each alpha memory node has an associated join node
-    //REQUIRE( (rs1->join_nodes_count == 2) );
-    //// each join node is associated with a beta memory node
-    //// (in thise case 1 root beta node + children)
-    //REQUIRE( (rs1->beta_memory_count == 2) );
-    //// this 1 production node represents the rule
-    //REQUIRE( (rs1->production_nodes_count == 1) );
+    // (1): var:?test, var:?x,   val:lol
+    // (2): var:?test, val:name, val:lol
+    REQUIRE( (rs1->alpha_memory_count == 2) );
+    // each alpha memory node has an associated join node
+    REQUIRE( (rs1->join_nodes_count == 2) );
+    // each join node is associated with a beta memory node
+    // (in thise case 1 root beta node + children)
+    REQUIRE( (rs1->beta_memory_count == 2) );
+    // this 1 production node represents the rule
+    REQUIRE( (rs1->production_nodes_count == 1) );
 
-    //rete::rete_t_destroy(rs1);
+    rete::rete_t_destroy(rs1);
 
-    ////free(r1.conditions);
-//}[> }}}<]
-//TEST_CASE( "Add multiple rules" ) {[> {{{<]
-    //rete::rule_t r1;
-    //r1.name = "sample rule";
-    //r1.salience = 0;
+    //free(r1.conditions);
+}/* }}}*/
+TEST_CASE( "Add multiple rules" ) {/* {{{*/
+    rete::rule_t r1;
+    r1.name = "sample rule";
+    r1.salience = 0;
 
-    //rete::condition_t r1_conditions[2] = {
-        //rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
-        //rete::condition_t(rete::var("x"), rete::attr("size"),  rete::var("y"))
-    //};
+    rete::condition_t r1_conditions[2] = {
+        rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
+        rete::condition_t(rete::var("x"), rete::attr("size"),  rete::var("y"))
+    };
 
-    //r1.conditions_size = 2;
-    //r1.conditions = r1_conditions;
-    //r1.action = r1_handler;
+    r1.conditions_size = 2;
+    r1.conditions = r1_conditions;
+    r1.action = r1_handler;
 
-    //rete::rule_t r2;
-    //r2.name = "rule #2";
-    //r2.salience = 0;
+    rete::rule_t r2;
+    r2.name = "rule #2";
+    r2.salience = 0;
 
-    //rete::condition_t r2_conditions[2] = {
-        //rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
-        //rete::condition_t(rete::var("x"), rete::attr("cost"),  rete::value_int(100))
-    //};
+    rete::condition_t r2_conditions[2] = {
+        rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
+        rete::condition_t(rete::var("x"), rete::attr("cost"),  rete::value_int(100))
+    };
 
-    //r2.conditions_size = 2;
-    //r2.conditions = r2_conditions;
-    //r2.action = r1_handler;
+    r2.conditions_size = 2;
+    r2.conditions = r2_conditions;
+    r2.action = r1_handler;
 
-    //rete::rete_t* rs = rete::rete_t_init();
-    //rete::add_rule(rs, r1);
-    //rete::add_rule(rs, r2);
+    rete::rete_t* rs = rete::rete_t_init();
+    rete::add_rule(rs, r1);
+    rete::add_rule(rs, r2);
 
-    //REQUIRE( (rs->alpha_memory_count == 3) ); // 1 per condition, 1 is shared = 3
-    //REQUIRE( (rs->beta_memory_count == 2) );  // 1 shared root + 1 (cost condition) = 2
-    //REQUIRE( (rs->join_nodes_count == 3) );   // 1 per AM = 3
-    //REQUIRE( (rs->production_nodes_count == 2) ); // 1 per rule = 2
-    //REQUIRE( (rs->token_count == 0) ); // no tokens are stored yet
+    REQUIRE( (rs->alpha_memory_count == 3) ); // 1 per condition, 1 is shared = 3
+    REQUIRE( (rs->beta_memory_count == 2) );  // 1 shared root + 1 (cost condition) = 2
+    REQUIRE( (rs->join_nodes_count == 3) );   // 1 per AM = 3
+    REQUIRE( (rs->production_nodes_count == 2) ); // 1 per rule = 2
+    REQUIRE( (rs->token_count == 0) ); // no tokens are stored yet
 
-    //rete::rete_t_destroy(rs);
+    rete::rete_t_destroy(rs);
 
-//}[> }}}<]
+}/* }}}*/
 TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
     rete::rule_t r;
     r.name = "example rule";
@@ -242,63 +242,63 @@ void x_z_t_d_comparator(rete::rule_action_state_t ras) {/* {{{*/
     REQUIRE( t_smaller_d );
 }/* }}}*/
 TEST_CASE( "Production Node activation with multiple comparators" ) {/* {{{*/
-rete::rule_t r1;
-r1.name = "rule #1: join ?x & ?z";
-r1.salience = 0;
+    rete::rule_t r1;
+    r1.name = "rule #1: join ?x & ?z";
+    r1.salience = 0;
 
-rete::condition_t conditions1[3] = {
-    rete::condition_t(rete::var("x"), rete::attr("heartrate"),  rete::value_int(80)),
-    rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("t")),
-    rete::condition_t(rete::var("z"), rete::attr("height"),        rete::var("d"), {
-        rete::join_test::var_join( rete::var("z"), rete::join_test::equal(),     rete::var("x") ),
-        rete::join_test::var_join( rete::var("d"), rete::join_test::not_equal(), rete::var("t") )
-    })
-};
+    rete::condition_t conditions1[3] = {
+        rete::condition_t(rete::var("x"), rete::attr("heartrate"),  rete::value_int(80)),
+        rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("t")),
+        rete::condition_t(rete::var("z"), rete::attr("height"),        rete::var("d"), {
+                rete::join_test::var_join( rete::var("z"), rete::join_test::equal(),     rete::var("x") ),
+                rete::join_test::var_join( rete::var("d"), rete::join_test::not_equal(), rete::var("t") )
+                })
+    };
 
-r1.conditions_size = 3;
-r1.conditions = conditions1;
-r1.action = x_z_comparator;
+    r1.conditions_size = 3;
+    r1.conditions = conditions1;
+    r1.action = x_z_comparator;
 
-rete::rule_t r2;
-r2.name = "rule #2: ?x != ?z && ?t < ?d";
-r2.salience = 0;
+    rete::rule_t r2;
+    r2.name = "rule #2: ?x != ?z && ?t < ?d";
+    r2.salience = 0;
 
-rete::condition_t conditions2[3] = {
-    rete::condition_t(rete::var("x"), rete::attr("bloodtype"), rete::value_string("AB") ),
-    rete::condition_t(rete::var("x"), rete::attr("children"),  rete::var("t") ),
-    rete::condition_t(rete::var("z"), rete::attr("siblings"),  rete::var("d"), {
-        rete::join_test::var_join( rete::var("d"), rete::join_test::greater_than(), rete::var("t") ),
-        rete::join_test::var_join( rete::var("z"), rete::join_test::not_equal(),    rete::var("x") )
-    })
-};
+    rete::condition_t conditions2[3] = {
+        rete::condition_t(rete::var("x"), rete::attr("bloodtype"), rete::value_string("AB") ),
+        rete::condition_t(rete::var("x"), rete::attr("children"),  rete::var("t") ),
+        rete::condition_t(rete::var("z"), rete::attr("siblings"),  rete::var("d"), {
+                rete::join_test::var_join( rete::var("d"), rete::join_test::greater_than(), rete::var("t") ),
+                rete::join_test::var_join( rete::var("z"), rete::join_test::not_equal(),    rete::var("x") )
+                })
+    };
 
-r2.conditions_size = 3;
-r2.conditions = conditions2;
-r2.action = x_z_t_d_comparator;
+    r2.conditions_size = 3;
+    r2.conditions = conditions2;
+    r2.action = x_z_t_d_comparator;
 
-rete::rete_t* rs = rete::rete_t_init();
-rete::add_rule(rs, r1);
-rete::add_rule(rs, r2);
+    rete::rete_t* rs = rete::rete_t_init();
+    rete::add_rule(rs, r1);
+    rete::add_rule(rs, r2);
 
-rete::create_wme(rs, "daniel", "heartrate", rete::value_int(80));
-rete::create_wme(rs, "daniel", "age",       rete::value_int(25));
-rete::create_wme(rs, "daniel", "height",    rete::value_int(30));
+    rete::create_wme(rs, "daniel", "heartrate", rete::value_int(80));
+    rete::create_wme(rs, "daniel", "age",       rete::value_int(25));
+    rete::create_wme(rs, "daniel", "height",    rete::value_int(30));
 
-REQUIRE( (rete::activated_production_nodes(rs) == 1)  );
-rete::trigger_activated_production_nodes(rs);
-REQUIRE( (rete::activated_production_nodes(rs) == 0)  );
+    REQUIRE( (rete::activated_production_nodes(rs) == 1)  );
+    rete::trigger_activated_production_nodes(rs);
+    REQUIRE( (rete::activated_production_nodes(rs) == 0)  );
 
-rete::create_wme(rs, "jack",   "bloodtype", rete::value_string("AB"));
-rete::create_wme(rs, "jack",   "children",  rete::value_int(3));
-rete::create_wme(rs, "chavez", "siblings",  rete::value_int(4));
-rete::create_wme(rs, "xavier", "siblings",  rete::value_int(2));
+    rete::create_wme(rs, "jack",   "bloodtype", rete::value_string("AB"));
+    rete::create_wme(rs, "jack",   "children",  rete::value_int(3));
+    rete::create_wme(rs, "chavez", "siblings",  rete::value_int(4));
+    rete::create_wme(rs, "xavier", "siblings",  rete::value_int(2));
 
-// # of activated PNs = 1, because only chavez's WME together with jack's WMEs matches the conditions
-printf("rete::activated_production_nodes(rs): %d\n", rete::activated_production_nodes(rs));
-REQUIRE( (rete::activated_production_nodes(rs) == 1) );
-rete::trigger_activated_production_nodes(rs);
+    // # of activated PNs = 1, because only chavez's WME together with jack's WMEs matches the conditions
+    printf("rete::activated_production_nodes(rs): %d\n", rete::activated_production_nodes(rs));
+    REQUIRE( (rete::activated_production_nodes(rs) == 1) );
+    rete::trigger_activated_production_nodes(rs);
 
-rete::rete_t_destroy(rs);
+    rete::rete_t_destroy(rs);
 
 }/* }}}*/
 TEST_CASE( "Join Tests with stacking variable and constant tests" ) {/* {{{*/
