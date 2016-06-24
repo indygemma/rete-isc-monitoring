@@ -371,9 +371,43 @@ TEST_CASE( "Join Tests with stacking variable and constant tests" ) {/* {{{*/
     rete::rete_t_destroy(rs);
 
 }/* }}}*/
-// TODO testAddSameConditions
-// TODO testSingleVarBindingFromJoinTestFromConditions
-// TODO testMultipleVarBindingFromJoinTestFromConditions
+TEST_CASE( "add same conditions" ) {/* {{{*/
+    rete::condition_t c1(rete::var("x"), rete::attr("color"), rete::var("y"));
+    rete::condition_t c2(rete::var("z"), rete::attr("color"), rete::var("g"));
+
+    rete::rete_t* r1 = rete::rete_t_init();
+    rete::add_condition(r1, c1);
+    rete::add_condition(r1, c2);
+
+    REQUIRE( (r1->alpha_memory_count == 1) );
+
+    rete_t_destroy(r1);
+}/* }}}*/
+TEST_CASE( "single variable binding from condition_t_get_join_tests" ) {/* {{{*/
+    rete::condition_t c1(rete::var("x"), rete::attr("color"),   rete::var("y"));
+    rete::condition_t c2(rete::var("y"), rete::attr("creator"), rete::value_string("you"));
+
+    std::vector<rete::join_test_t> tests = condition_t_get_join_tests(c1, {c2});
+
+    REQUIRE( tests.size() == 1 );
+    REQUIRE( tests[0].condition_of_arg2 == 0 );
+    REQUIRE( tests[0].field_of_arg1 == rete::join_test::VALUE );
+    REQUIRE( tests[0].field_of_arg2 == rete::join_test::IDENTIFIER );
+}/* }}}*/
+TEST_CASE( "multiple variable binding from condition_t_get_join_tests" ) {/* {{{*/
+    rete::condition_t c1(rete::var("x"), rete::attr("color"),   rete::var("y"));
+    rete::condition_t c2(rete::var("y"), rete::attr("creator"), rete::value_string("you"));
+    rete::condition_t c3(rete::var("y"), rete::attr("date"),    rete::value_string("yesterday"));
+
+    std::vector<rete::join_test_t> tests = condition_t_get_join_tests(c1, {c2, c3});
+
+    // Only the nearest / immediate neighbor is used for the join test
+
+    REQUIRE( tests.size() == 1 );
+    REQUIRE( tests[0].condition_of_arg2 == 0 );
+    REQUIRE( tests[0].field_of_arg1 == rete::join_test::VALUE );
+    REQUIRE( tests[0].field_of_arg2 == rete::join_test::IDENTIFIER );
+}/* }}}*/
 
 // for later:
 // TODO: testWMERemovalWorks
