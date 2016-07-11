@@ -61,23 +61,23 @@ int main(int argc, char** argv)
     //}
 
     std::unordered_map<rete::condition_t, std::string, rete::condition_t_hasher> m2 = {
-        { rete::condition_t(rete::var("x"), rete::attr("on"),      rete::var("y")),              "?y?" },
-        { rete::condition_t(rete::var("y"), rete::attr("left-of"), rete::var("z")),              "?y?" },
-        { rete::condition_t(rete::var("z"), rete::attr("color"),   rete::value_string("red")),   "?yz" },
-        { rete::condition_t(rete::var("a"), rete::attr("color"),   rete::value_string("maize")), "?yz" },
-        { rete::condition_t(rete::var("b"), rete::attr("color"),   rete::value_string("blue")),  "?yz" },
-        { rete::condition_t(rete::var("c"), rete::attr("color"),   rete::value_string("green")), "?yz" },
-        { rete::condition_t(rete::var("d"), rete::attr("color"),   rete::value_string("white")), "?yz" },
-        { rete::condition_t(rete::var("s"), rete::attr("on"),      rete::value_string("table")), "?yz" },
-        { rete::condition_t(rete::var("y"), rete::var("a"),        rete::var("b")),              "???" },
-        { rete::condition_t(rete::var("a"), rete::attr("left-of"), rete::var("d")),              "?y?" }
+        { rete::condition_t_vav(rete::var("x"), rete::attr("on"),      rete::var("y")),              "?y?" },
+        { rete::condition_t_vav(rete::var("y"), rete::attr("left-of"), rete::var("z")),              "?y?" },
+        { rete::condition_t_vax(rete::var("z"), rete::attr("color"),   rete::value_string("red")),   "?yz" },
+        { rete::condition_t_vax(rete::var("a"), rete::attr("color"),   rete::value_string("maize")), "?yz" },
+        { rete::condition_t_vax(rete::var("b"), rete::attr("color"),   rete::value_string("blue")),  "?yz" },
+        { rete::condition_t_vax(rete::var("c"), rete::attr("color"),   rete::value_string("green")), "?yz" },
+        { rete::condition_t_vax(rete::var("d"), rete::attr("color"),   rete::value_string("white")), "?yz" },
+        { rete::condition_t_vax(rete::var("s"), rete::attr("on"),      rete::value_string("table")), "?yz" },
+        { rete::condition_t_vvv(rete::var("y"), rete::var("a"),        rete::var("b")),              "???" },
+        { rete::condition_t_vav(rete::var("a"), rete::attr("left-of"), rete::var("d")),              "?y?" }
     };
 
     for (const auto&n : m2) {
-        std::cout << "Key:[" << n.first.as_key() << "] Value:[" << n.second << "]\n";
+        std::cout << "Key:[" << condition_t_as_key(n.first) << "] Value:[" << n.second << "]\n";
     }
 
-    rete::condition_t non_existent_key = rete::condition_t(rete::id("test"), rete::attr("on"), rete::value_bool(true));
+    rete::condition_t non_existent_key = rete::condition_t_iax(rete::id("test"), rete::attr("on"), rete::value_bool(true));
     std::unordered_map<rete::condition_t, std::string, rete::condition_t_hasher>::const_iterator it = m2.find(non_existent_key);
     if (it == m2.end()) {
         std::cout << "KEY NOT FOUND";

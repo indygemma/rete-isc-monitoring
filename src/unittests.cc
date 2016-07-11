@@ -3,7 +3,7 @@
 #include "include/rete.h"
 
 TEST_CASE( "Adding a condition to alpha memory" ) {/* {{{*/
-    rete::condition_t c1(rete::var("test"), rete::var("x"), rete::value_string("lol1"));
+    rete::condition_t c1 = rete::condition_t_vvx(rete::var("test"), rete::var("x"), rete::value_string("lol1"));
 
     rete::rete_t* r1 = rete::rete_t_init();
     rete::add_condition(r1, c1);
@@ -13,8 +13,8 @@ TEST_CASE( "Adding a condition to alpha memory" ) {/* {{{*/
     rete_t_destroy(r1);
 }/* }}}*/
 TEST_CASE( "Adding two seperate conditions to alpha memory" ) {/* {{{*/
-    rete::condition_t c1(rete::var("test"), rete::var("x"),     rete::value_string("lol2"));
-    rete::condition_t c2(rete::var("test"), rete::attr("name"), rete::value_string("lol3"));
+    rete::condition_t c1 = condition_t_vvx(rete::var("test"), rete::var("x"),     rete::value_string("lol2"));
+    rete::condition_t c2 = condition_t_vax(rete::var("test"), rete::attr("name"), rete::value_string("lol3"));
 
     rete::rete_t* r1 = rete::rete_t_init();
     rete::add_condition(r1, c1);
@@ -33,8 +33,8 @@ TEST_CASE( "Add a single rule" ) {/* {{{*/
     r1.salience = 0;
 
     rete::condition_t conditions[2] = {
-        rete::condition_t(rete::var("test"), rete::var("x"),     rete::value_string("lol4")),
-        rete::condition_t(rete::var("test"), rete::attr("name"), rete::value_string("lol5"))
+        rete::condition_t_vvx(rete::var("test"), rete::var("x"),     rete::value_string("lol4")),
+        rete::condition_t_vax(rete::var("test"), rete::attr("name"), rete::value_string("lol5"))
     };
 
     r1.conditions_size = 2;
@@ -68,8 +68,8 @@ TEST_CASE( "Add multiple rules" ) {/* {{{*/
     r1.salience = 0;
 
     rete::condition_t r1_conditions[2] = {
-        rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
-        rete::condition_t(rete::var("x"), rete::attr("size"),  rete::var("y"))
+        rete::condition_t_vax(rete::var("x"), rete::attr("color"), rete::value_string("red")),
+        rete::condition_t_vav(rete::var("x"), rete::attr("size"),  rete::var("y"))
     };
 
     r1.conditions_size = 2;
@@ -81,8 +81,8 @@ TEST_CASE( "Add multiple rules" ) {/* {{{*/
     r2.salience = 0;
 
     rete::condition_t r2_conditions[2] = {
-        rete::condition_t(rete::var("x"), rete::attr("color"), rete::value_string("red")),
-        rete::condition_t(rete::var("x"), rete::attr("cost"),  rete::value_int(100))
+        rete::condition_t_vax(rete::var("x"), rete::attr("color"), rete::value_string("red")),
+        rete::condition_t_vax(rete::var("x"), rete::attr("cost"),  rete::value_int(100))
     };
 
     r2.conditions_size = 2;
@@ -108,10 +108,10 @@ TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
     r.salience = 0;
 
     rete::condition_t conditions[4] = {
-        rete::condition_t(rete::var("x"), rete::attr("eye-colors"), rete::value_string("blue")),
-        rete::condition_t(rete::var("x"), rete::attr("height"),     rete::value_int(170)),
-        rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("y")),
-        rete::condition_t(rete::var("z"), rete::attr("age"),        rete::var("y"))
+        rete::condition_t_vax(rete::var("x"), rete::attr("eye-colors"), rete::value_string("blue")),
+        rete::condition_t_vax(rete::var("x"), rete::attr("height"),     rete::value_int(170)),
+        rete::condition_t_vav(rete::var("x"), rete::attr("age"),        rete::var("y")),
+        rete::condition_t_vav(rete::var("z"), rete::attr("age"),        rete::var("y"))
     };
 
     r.conditions_size = 4;
@@ -178,10 +178,10 @@ TEST_CASE( "Correct Production Nodes are activated" ) {/* {{{*/
     r.salience = 0;
 
     rete::condition_t conditions[4] = {
-        rete::condition_t(rete::var("x"), rete::attr("eye-colors"), rete::value_string("blue")),
-        rete::condition_t(rete::var("x"), rete::attr("height"),     rete::value_int(170)),
-        rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("y")),
-        rete::condition_t(rete::var("z"), rete::attr("age"),        rete::var("y"))
+        rete::condition_t_vax(rete::var("x"), rete::attr("eye-colors"), rete::value_string("blue")),
+        rete::condition_t_vax(rete::var("x"), rete::attr("height"),     rete::value_int(170)),
+        rete::condition_t_vav(rete::var("x"), rete::attr("age"),        rete::var("y")),
+        rete::condition_t_vav(rete::var("z"), rete::attr("age"),        rete::var("y"))
     };
 
     r.conditions_size = 4;
@@ -247,9 +247,9 @@ TEST_CASE( "Production Node activation with multiple comparators" ) {/* {{{*/
     r1.salience = 0;
 
     rete::condition_t conditions1[3] = {
-        rete::condition_t(rete::var("x"), rete::attr("heartrate"),  rete::value_int(80)),
-        rete::condition_t(rete::var("x"), rete::attr("age"),        rete::var("t")),
-        rete::condition_t(rete::var("z"), rete::attr("height"),        rete::var("d"), {
+        rete::condition_t_vax(rete::var("x"), rete::attr("heartrate"),  rete::value_int(80)),
+        rete::condition_t_vav(rete::var("x"), rete::attr("age"),        rete::var("t")),
+        rete::condition_t_vavjv(rete::var("z"), rete::attr("height"),        rete::var("d"), {
                 rete::join_test::var_join( rete::var("z"), rete::join_test::equal(),     rete::var("x") ),
                 rete::join_test::var_join( rete::var("d"), rete::join_test::not_equal(), rete::var("t") )
                 })
@@ -264,9 +264,9 @@ TEST_CASE( "Production Node activation with multiple comparators" ) {/* {{{*/
     r2.salience = 0;
 
     rete::condition_t conditions2[3] = {
-        rete::condition_t(rete::var("x"), rete::attr("bloodtype"), rete::value_string("AB") ),
-        rete::condition_t(rete::var("x"), rete::attr("children"),  rete::var("t") ),
-        rete::condition_t(rete::var("z"), rete::attr("siblings"),  rete::var("d"), {
+        rete::condition_t_vax(rete::var("x"), rete::attr("bloodtype"), rete::value_string("AB") ),
+        rete::condition_t_vav(rete::var("x"), rete::attr("children"),  rete::var("t") ),
+        rete::condition_t_vavjv(rete::var("z"), rete::attr("siblings"),  rete::var("d"), {
                 rete::join_test::var_join( rete::var("d"), rete::join_test::greater_than(), rete::var("t") ),
                 rete::join_test::var_join( rete::var("z"), rete::join_test::not_equal(),    rete::var("x") )
                 })
@@ -307,25 +307,25 @@ TEST_CASE( "Join Tests with stacking variable and constant tests" ) {/* {{{*/
     r1.salience = 0;
 
     rete::condition_t conditions[9] = {
-        rete::condition_t(rete::var("fred"), rete::attr("name"),     rete::value_string("Fred")),
-        rete::condition_t(rete::var("fred"), rete::attr("position"), rete::var("fred_position")),
-        rete::condition_t(rete::var("fred"), rete::attr("color"),    rete::var("fred_color")),
+        rete::condition_t_vax(rete::var("fred"), rete::attr("name"),     rete::value_string("Fred")),
+        rete::condition_t_vav(rete::var("fred"), rete::attr("position"), rete::var("fred_position")),
+        rete::condition_t_vav(rete::var("fred"), rete::attr("color"),    rete::var("fred_color")),
 
-        rete::condition_t(rete::var("joe"),  rete::attr("name"),     rete::value_string("Joe")),
-        rete::condition_t(rete::var("joe"),  rete::attr("position"), rete::var("joe_position"), {
+        rete::condition_t_vax(rete::var("joe"),  rete::attr("name"),     rete::value_string("Joe")),
+        rete::condition_t_vavjv(rete::var("joe"),  rete::attr("position"), rete::var("joe_position"), {
             rete::join_test::const_join( rete::var("joe_position"), rete::join_test::equal(),     rete::value_int(2) ),
             rete::join_test::var_join(   rete::var("joe_position"), rete::join_test::not_equal(), rete::var("fred_position") )
         }),
-        rete::condition_t(rete::var("joe"), rete::attr("color"), rete::var("joe_color"), {
+        rete::condition_t_vavjv(rete::var("joe"), rete::attr("color"), rete::var("joe_color"), {
             rete::join_test::var_join( rete::var("joe_color"), rete::join_test::not_equal(), rete::var("fred_color") )
         }),
 
-        rete::condition_t(rete::var("bob"), rete::attr("name"),     rete::value_string("Bob")),
-        rete::condition_t(rete::var("bob"), rete::attr("position"), rete::var("bob_position"), {
+        rete::condition_t_vax(rete::var("bob"), rete::attr("name"),     rete::value_string("Bob")),
+        rete::condition_t_vavjv(rete::var("bob"), rete::attr("position"), rete::var("bob_position"), {
             rete::join_test::var_join( rete::var("bob_position"), rete::join_test::not_equal(), rete::var("fred_position") ),
             rete::join_test::var_join( rete::var("bob_position"), rete::join_test::not_equal(), rete::var("joe_position") )
         }),
-        rete::condition_t(rete::var("bob"), rete::attr("color"), rete::var("bob_color"), {
+        rete::condition_t_vavjv(rete::var("bob"), rete::attr("color"), rete::var("bob_color"), {
             rete::join_test::const_join( rete::var("bob_color"), rete::join_test::equal(),     rete::value_string("plaid") ),
             rete::join_test::var_join(   rete::var("bob_color"), rete::join_test::not_equal(), rete::var("fred_color") ),
             rete::join_test::var_join(   rete::var("bob_color"), rete::join_test::not_equal(), rete::var("joe_color") )
@@ -372,8 +372,8 @@ TEST_CASE( "Join Tests with stacking variable and constant tests" ) {/* {{{*/
 
 }/* }}}*/
 TEST_CASE( "add same conditions" ) {/* {{{*/
-    rete::condition_t c1(rete::var("x"), rete::attr("color"), rete::var("y"));
-    rete::condition_t c2(rete::var("z"), rete::attr("color"), rete::var("g"));
+    rete::condition_t c1 = condition_t_vav(rete::var("x"), rete::attr("color"), rete::var("y"));
+    rete::condition_t c2 = condition_t_vav(rete::var("z"), rete::attr("color"), rete::var("g"));
 
     rete::rete_t* r1 = rete::rete_t_init();
     rete::add_condition(r1, c1);
@@ -384,8 +384,8 @@ TEST_CASE( "add same conditions" ) {/* {{{*/
     rete_t_destroy(r1);
 }/* }}}*/
 TEST_CASE( "single variable binding from condition_t_get_join_tests" ) {/* {{{*/
-    rete::condition_t c1(rete::var("x"), rete::attr("color"),   rete::var("y"));
-    rete::condition_t c2(rete::var("y"), rete::attr("creator"), rete::value_string("you"));
+    rete::condition_t c1 = condition_t_vav(rete::var("x"), rete::attr("color"),   rete::var("y"));
+    rete::condition_t c2 = condition_t_vax(rete::var("y"), rete::attr("creator"), rete::value_string("you"));
 
     std::vector<rete::join_test_t> tests = condition_t_get_join_tests(c1, {c2});
 
@@ -395,9 +395,9 @@ TEST_CASE( "single variable binding from condition_t_get_join_tests" ) {/* {{{*/
     REQUIRE( tests[0].field_of_arg2 == rete::join_test::IDENTIFIER );
 }/* }}}*/
 TEST_CASE( "multiple variable binding from condition_t_get_join_tests" ) {/* {{{*/
-    rete::condition_t c1(rete::var("x"), rete::attr("color"),   rete::var("y"));
-    rete::condition_t c2(rete::var("y"), rete::attr("creator"), rete::value_string("you"));
-    rete::condition_t c3(rete::var("y"), rete::attr("date"),    rete::value_string("yesterday"));
+    rete::condition_t c1 = condition_t_vav(rete::var("x"), rete::attr("color"),   rete::var("y"));
+    rete::condition_t c2 = condition_t_vax(rete::var("y"), rete::attr("creator"), rete::value_string("you"));
+    rete::condition_t c3 = condition_t_vax(rete::var("y"), rete::attr("date"),    rete::value_string("yesterday"));
 
     std::vector<rete::join_test_t> tests = condition_t_get_join_tests(c1, {c2, c3});
 

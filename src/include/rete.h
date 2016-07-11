@@ -24,7 +24,7 @@ namespace rete {
     typedef void (*rule_action)(rule_action_state_t);
 
     struct var_t {/* {{{*/
-        const char* name;
+        char* name;
 
         bool operator==(const var_t &other) const
         {
@@ -71,7 +71,7 @@ namespace rete {
 
         bool operator==(const value_t &other) const
         {
-            printf("[DEBUG] comparing value_t. (%s vs %s)\n", value_t_show(*this).c_str(), value_t_show(other).c_str());
+            //printf("[DEBUG] comparing value_t. (%s vs %s)\n", value_t_show(*this).c_str(), value_t_show(other).c_str());
             if (type != other.type)
                 return false;
 
@@ -169,206 +169,53 @@ namespace rete {
         condition_t var_join(var_t var1, comparator_t comparator, var_t var2);
         condition_t const_join(var_t var, comparator_t comparator, value_t val);
     }/* }}}*/
-    class condition_t {/* {{{*/
 
-        public:
+    struct condition_t {/* {{{*/
+        // TODO: improve using bitmask
+        bool identifier_is_constant;
+        bool attribute_is_constant;
+        bool value_is_constant;
 
-            // 1) ???
-            condition_t(var_t id, var_t attr, var_t value) {/* {{{*/
-                identifier_as_var = id;
-                attribute_as_var = attr;
-                value_as_var = value;
+        var_t identifier_as_var;
+        id_t  identifier_as_val;
 
-                identifier_is_constant = false;
-                attribute_is_constant = false;
-                value_is_constant = false;
-            }/* }}}*/
-            // 2) x??
-            condition_t(id_t id, var_t attr, var_t value)/* {{{*/
-            {
-                identifier_as_val = id;
-                attribute_as_var = attr;
-                value_as_var = value;
+        var_t  attribute_as_var;
+        attr_t attribute_as_val;
 
-                identifier_is_constant = true;
-                attribute_is_constant = false;
-                value_is_constant = false;
-            }/* }}}*/
-            // 3) ?y?
-            condition_t(var_t id, attr_t attr, var_t value)/* {{{*/
-            {
-                identifier_as_var = id;
-                attribute_as_val = attr;
-                value_as_var = value;
+        var_t   value_as_var;
+        value_t value_as_val;
 
-                identifier_is_constant = false;
-                attribute_is_constant = true;
-                value_is_constant = false;
-            }/* }}}*/
-            // ?y? with join tests
-            condition_t(var_t id, attr_t attr, var_t value, join_test::condition_t* jts, int n)/* {{{*/
-            {
-                identifier_as_var = id;
-                attribute_as_val = attr;
-                value_as_var = value;
+        std::vector<join_test::condition_t> join_test_conditions;
 
-                identifier_is_constant = false;
-                attribute_is_constant = true;
-                value_is_constant = false;
-                copy_conditions(jts, n);
-            }/* }}}*/
+        bool operator==(const condition_t &other) const/* {{{*/
+        {
+            if (identifier_is_constant != other.identifier_is_constant)
+                return false;
 
-            condition_t(var_t id, attr_t attr, var_t value, std::vector<join_test::condition_t> jts)/* {{{*/
-            {
-                identifier_as_var = id;
-                attribute_as_val = attr;
-                value_as_var = value;
+            if (attribute_is_constant != other.attribute_is_constant)
+                return false;
 
-                identifier_is_constant = false;
-                attribute_is_constant = true;
-                value_is_constant = false;
+            if (value_is_constant != other.value_is_constant)
+                return false;
 
-                for (join_test::condition_t c : jts)
-                    join_test_conditions.push_back(c);
-            }/* }}}*/
-
-            // 4) ??z
-            condition_t(var_t id, var_t attr, value_t value)/* {{{*/
-            {
-                identifier_as_var = id;
-                attribute_as_var = attr;
-                value_as_val = value;
-
-                identifier_is_constant = false;
-                attribute_is_constant = false;
-                value_is_constant = true;
-            }/* }}}*/
-
-            // 5) ?yz
-            condition_t(var_t id, attr_t attr, value_t value)/* {{{*/
-            {
-                identifier_as_var = id;
-                attribute_as_val = attr;
-                value_as_val = value;
-
-                identifier_is_constant = false;
-                attribute_is_constant = true;
-                value_is_constant = true;
-            }/* }}}*/
-
-            // 6) xy?
-            condition_t(id_t id, attr_t attr, var_t value)/* {{{*/
-            {
-                identifier_as_val = id;
-                attribute_as_val = attr;
-                value_as_var = value;
-
-                identifier_is_constant = true;
-                attribute_is_constant = true;
-                value_is_constant = false;
-            }/* }}}*/
-
-            // 7) x?z
-            condition_t(id_t id, var_t attr, value_t value)/* {{{*/
-            {
-                identifier_as_val = id;
-                attribute_as_var = attr;
-                value_as_val = value;
-
-                identifier_is_constant = true;
-                attribute_is_constant = false;
-                value_is_constant = true;
-            }/* }}}*/
-            // 8) xyz
-            condition_t(id_t id, attr_t attr, value_t value)/* {{{*/
-            {
-                identifier_as_val = id;
-                attribute_as_val = attr;
-                value_as_val = value;
-
-                identifier_is_constant = true;
-                attribute_is_constant = true;
-                value_is_constant = true;
-            }/* }}}*/
-
-            std::string as_key() const/* {{{*/
-            {
-                std::string result = "";
-
-                if (identifier_is_constant)
-                    result += identifier_as_val.name;
-                else
-                    result += "*";
-
-                result += ",";
-
-                if (attribute_is_constant)
-                    result += attribute_as_val.name;
-                else
-                    result += "*";
-
-                result += ",";
-
-                if (value_is_constant)
-                    result += value_t_show(value_as_val);
-                else
-                    result += "*";
-
-                return result;
-            }/* }}}*/
-
-            // TODO: improve using bitmask
-            bool identifier_is_constant;
-            bool attribute_is_constant;
-            bool value_is_constant;
-
-            var_t identifier_as_var;
-            id_t  identifier_as_val;
-
-            var_t  attribute_as_var;
-            attr_t attribute_as_val;
-
-            var_t   value_as_var;
-            value_t value_as_val;
-
-            std::vector<join_test::condition_t> join_test_conditions;
-
-            bool operator==(const condition_t &other) const/* {{{*/
-            {
-                if (identifier_is_constant != other.identifier_is_constant)
+            if (identifier_is_constant && other.identifier_is_constant) {
+                if (strcmp(identifier_as_val.name, other.identifier_as_val.name) != 0)
                     return false;
+            }
 
-                if (attribute_is_constant != other.attribute_is_constant)
+            if (attribute_is_constant && other.attribute_is_constant) {
+                if (strcmp(attribute_as_val.name, other.attribute_as_val.name) != 0)
                     return false;
+            }
 
-                if (value_is_constant != other.value_is_constant)
+            if (value_is_constant && other.value_is_constant) {
+                if (!(value_as_val == other.value_as_val))
                     return false;
+            }
 
-                if (identifier_is_constant && other.identifier_is_constant) {
-                    if (strcmp(identifier_as_val.name, other.identifier_as_val.name) != 0)
-                        return false;
-                }
+            return true;
+        }/* }}}*/
 
-                if (attribute_is_constant && other.attribute_is_constant) {
-                    if (strcmp(attribute_as_val.name, other.attribute_as_val.name) != 0)
-                        return false;
-                }
-
-                if (value_is_constant && other.value_is_constant) {
-                    if (!(value_as_val == other.value_as_val))
-                        return false;
-                }
-
-                return true;
-            }/* }}}*/
-
-        private:
-            void copy_conditions(join_test::condition_t* jts, int n)/* {{{*/
-            {
-                for (int i=0;i<n;i++) {
-                    join_test_conditions.push_back(jts[i]);
-                }
-            }/* }}}*/
     };/* }}}*/
     struct condition_t_hasher/* {{{*/
     {
@@ -763,11 +610,15 @@ namespace rete {
         beta_node_t* root_beta_node;
         std::vector<activated_production_node_t> conflict_set;
         activated_production_table_type activated_production_table;
+
+        // stats
+        int alpha_node_activations = 0;
+        int beta_node_activations = 0;
+        int join_node_activations = 0;
+        int production_node_activations = 0;
+        int join_tests = 0;
+
     };/* }}}*/
-
-    rete_t* rete_t_init();
-    void rete_t_destroy(rete_t*);
-
     struct rule_t {/* {{{*/
         const char* name;
         unsigned int salience;
@@ -782,22 +633,47 @@ namespace rete {
         mapped_variables_type mapped_variables_table;
     };/* }}}*/
 
-    var_t   var(const char* name);
-    id_t    id(const char* name);
-    attr_t  attr(const char* name);
-    value_t value_int(int x);
-    value_t value_float(float x);
-    value_t value_bool(bool x);
-    value_t value_string(const char* str);
-
     // public functions TODO: which of these functions are actually public?/* {{{*/
-    alpha_node_t* add_condition(rete_t* rs, condition_t& condition);
-    void add_rule(rete_t* rs, rule_t& rule);
-    void create_wme(rete_t* rs, const char* id, const char* attr, value_t val);
-    void remove_wme(rete_t* rs, wme_t*);
-    maybe_value_t lookup_var(rule_action_state_t ras, const char*);
-    int activated_production_nodes(rete_t* rs);
-    void trigger_activated_production_nodes(rete_t* rs);
+    extern "C" {
+        rete_t* rete_t_init();
+        void rete_t_destroy(rete_t*);
+        alpha_node_t* add_condition(rete_t* rs, condition_t& condition);
+        void add_rule(rete_t* rs, rule_t rule);
+        void create_wme(rete_t* rs, const char* id, const char* attr, value_t val);
+        void remove_wme(rete_t* rs, wme_t*);
+        maybe_value_t lookup_var(rule_action_state_t ras, const char*);
+        int activated_production_nodes(rete_t* rs);
+        void trigger_activated_production_nodes(rete_t* rs);
+
+        var_t   var(const char* name);
+        id_t    id(const char* name);
+        attr_t  attr(const char* name);
+        value_t value_int(int x);
+        value_t value_float(float x);
+        value_t value_bool(bool x);
+        value_t value_string(const char* str);
+
+        // 1) ???
+        condition_t condition_t_vvv(var_t id, var_t attr, var_t value);
+        // 2) x??
+        condition_t condition_t_ivv(id_t id, var_t attr, var_t value);
+        // 3) ?y?
+        condition_t condition_t_vav(var_t id, attr_t attr, var_t value);
+        // ?y? with join tests
+        condition_t condition_t_vavj(var_t id, attr_t attr, var_t value, join_test::condition_t* jts, int n);
+        condition_t condition_t_vavjv(var_t id, attr_t attr, var_t value, std::vector<join_test::condition_t> jts);
+        // 4) ??z
+        condition_t condition_t_vvx(var_t id, var_t attr, value_t value);
+        // 5) ?yz
+        condition_t condition_t_vax(var_t id, attr_t attr, value_t value);
+        // 6) xy?
+        condition_t condition_t_iav(id_t id, attr_t attr, var_t value);
+        // 7) x?z
+        condition_t condition_t_ivx(id_t id, var_t attr, value_t value);
+        // 8) xyz
+        condition_t condition_t_iax(id_t id, attr_t attr, value_t value);
+    }
+
     std::vector<join_test_t> condition_t_get_join_tests(condition_t&, std::deque<condition_t>);
     join_node_t* build_or_share_join_node_t(rete_t*, beta_node_t*, alpha_node_t*, std::vector<join_test_t>, bool&);
     beta_node_t* build_or_share_beta_node_t(rete_t*, join_node_t*);/* }}}*/
@@ -807,7 +683,9 @@ namespace rete {
     void rete_t_add_wme(rete_t* rs, wme_t* wme);
     void rete_t_remove_wme(rete_t* rs, wme_t* wme);
     wme_t* rete_t_find_wme(rete_t* rs, const char* id, const char* attr);
-    void sync_activated_production_nodes(rete_t* rs);/* }}}*/
+    void sync_activated_production_nodes(rete_t* rs);
+    void rete_t_reset_stats(rete_t* rs);
+    /* }}}*/
     // JOIN NODE functions/* {{{*/
     join_node_t* join_node_t_init(beta_node_t*, alpha_node_t*, std::vector<join_test_t>);
     void join_node_t_add_beta_memory(join_node_t*, beta_node_t*);
@@ -850,6 +728,9 @@ namespace rete {
     std::vector<condition_t> wme_t_derive_conditions_for_lookup(wme_t*);
     void wme_t_destroy(rete_t*, wme_t*);/* }}}*/
     // condition_t functions/* {{{*/
+    std::string condition_t_as_key(condition_t);
+    void condition_t_copy_join_test_conditions(condition_t& c, join_test::condition_t* jts, int n);
+
     maybe_var_t condition_t_find_variables(condition_t&);/* }}}*/
 }
 

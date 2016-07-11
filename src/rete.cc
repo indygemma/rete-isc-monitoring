@@ -12,8 +12,14 @@ namespace rete {
         return x ? "true" : "false";
     }/* }}}*/
     var_t var(const char* name) {/* {{{*/
+        //printf("var1\n");
         var_t v;
-        v.name = name;
+        //printf("var2\n");
+        //printf("variable name:%s\n", name);
+        v.name = (char*)malloc(strlen(name)+1);
+        //printf("var3\n");
+        strcpy(v.name, name);
+        //printf("var4\n");
         return v;
     }/* }}}*/
     id_t id(const char* name) {/* {{{*/
@@ -103,12 +109,12 @@ namespace rete {
     }/* }}}*/
     void wme_t_show(wme_t* wme)/* {{{*/
     {
-        printf("\tWME: (%s, %s, %s)\n", wme->identifier, wme->attribute, value_t_show(wme->value).c_str());
+        //printf("\tWME: (%s, %s, %s)\n", wme->identifier, wme->attribute, value_t_show(wme->value).c_str());
     }/* }}}*/
     void alpha_node_t_show(alpha_node_t* an)/* {{{*/
     {
-        printf("Alpha Node(%)\n", an);
-        printf("-> WMES:\n");
+        //printf("Alpha Node(%)\n", an);
+        //printf("-> WMES:\n");
         for (wme_t* wme : an->wmes)
             wme_t_show(wme);
     }/* }}}*/
@@ -197,15 +203,15 @@ namespace rete {
         // an->wmes be a different structure for easier searching of wmes
         // for better performance?
         bool exists = std::find(an->wmes.begin(), an->wmes.end(), wme) != an->wmes.end();
-        printf("[DEBUG alpha_node_t_wme_exists? %s\n", bool_show(exists));
-        wme_t_show(wme);
+        //printf("[DEBUG alpha_node_t_wme_exists? %s\n", bool_show(exists));
+        //wme_t_show(wme);
         alpha_node_t_show(an);
         return exists;
     }/* }}}*/
     void alpha_node_t_add_wme(alpha_node_t* an, wme_t* wme)/* {{{*/
     {
-        printf("\t\t\t[DEBUG] alpha_node_t_add_wme: (alpha node:%p)\n", an);
-        wme_t_show(wme);
+        //printf("\t\t\t[DEBUG] alpha_node_t_add_wme: (alpha node:%p)\n", an);
+        //wme_t_show(wme);
         an->wmes.push_front(wme);
     }/* }}}*/
     void alpha_node_t_update_wmes(alpha_node_t* am)/* {{{*/
@@ -273,7 +279,10 @@ namespace rete {
     void alpha_node_t_activate(rete_t* rs, alpha_node_t* an, wme_t* wme,/* {{{*/
                                wme::operation::type wme_op)
     {
-        printf("[DEBUG] alpha_node_t_activate\n");
+        //printf("[DEBUG] alpha_node_t_activate\n");
+
+        rs->alpha_node_activations++;
+
         switch (wme_op)
         {
             case wme::operation::ADD: {
@@ -347,6 +356,7 @@ namespace rete {
     }/* }}}*/
     bool alpha_node_t_has_condition(alpha_node_t* am, condition_t& condition)/* {{{*/
     {
+        //printf("alpha_node_t_has_condition\n");
         for (condition_t& c : am->conditions) {
             if (condition_t_equal_vars(condition, c))
                 return true;
@@ -354,9 +364,13 @@ namespace rete {
     }/* }}}*/
     void alpha_node_t_associate_condition(alpha_node_t* am, condition_t& condition)/* {{{*/
     {
+        //printf("alpha_node_t_associate_condition1\n");
         if (!alpha_node_t_has_condition(am, condition)) {
+            //printf("alpha_node_t_associate_condition2\n");
             alpha_node_t_associate_variables(am, condition);
+            //printf("alpha_node_t_associate_condition3\n");
             am->conditions.push_back(condition);
+            //printf("alpha_node_t_associate_condition4\n");
         }
     }/* }}}*/
     void alpha_node_t_destroy(alpha_node_t* x)/* {{{*/
@@ -385,18 +399,21 @@ namespace rete {
         if (!maybe_am) {
             created = true;
             alpha_node_t* new_am  = alpha_node_t_init();
-            printf("[DEBUG] creating new alpha node (%p) for condition\n", new_am);
-            condition_t_show(condition);
+            //printf("[DEBUG] creating new alpha node (%p) for condition\n", new_am);
+            //condition_t_show(condition);
+            //printf("add_condition1\n");
             alpha_node_t_associate_condition(new_am, condition);
+            //printf("add_condition2\n");
 
             rs->alpha_network[condition] = new_am;
             rs->alpha_memory_count++;
+            //printf("add_condition3\n");
             return new_am;
         } else {
             created = false;
 
-            printf("[DEBUG] reusing alpha node (%p) for condition\n", maybe_am);
-            condition_t_show(condition);
+            //printf("[DEBUG] reusing alpha node (%p) for condition\n", maybe_am);
+            //condition_t_show(condition);
             alpha_node_t_associate_condition(maybe_am, condition);
 
             return maybe_am;
@@ -438,18 +455,18 @@ namespace rete {
      */
     wme_t* token_t_get_nth_wme(token_t* token, int idx)/* {{{*/
     {
-        printf("[DEBUG] token_t_get_nth_wme %p idx=%d\n", token, idx);
-        token_t_show(token);
+        //printf("[DEBUG] token_t_get_nth_wme %p idx=%d\n", token, idx);
+        //token_t_show(token);
         token_t* parent = token;
         // TODO: not sure if idx is correct or not (<= or <?).
         // Check relative index is correct.
         for (int i=0;i<idx;i++) {
-            printf("nth: %d\n", i);
+            //printf("nth: %d\n", i);
             assert( token->parent != NULL );
             parent = parent->parent;
-            wme_t_show(parent->wme);
+            //wme_t_show(parent->wme);
         }
-        printf("parent->wme: %p\n", parent->wme);
+        //printf("parent->wme: %p\n", parent->wme);
         return parent->wme;
     }/* }}}*/
     const char* show_condition_field(join_test::condition_field& field)/* {{{*/
@@ -463,31 +480,33 @@ namespace rete {
                 return "VALUE";
         }
     }/* }}}*/
-    join_test_result perform_join_tests(std::vector<join_test_t> jts, token_t* token, wme_t* wme)/* {{{*/
+    join_test_result perform_join_tests(rete_t* rs, std::vector<join_test_t> jts, token_t* token, wme_t* wme)/* {{{*/
     {
         join_test_result result;
         result.passed = true; // default to true
 
-        printf("[DEBUG] perform_join_tests: join test size = %d. WME is:\n", jts.size());
-        wme_t_show(wme);
+        //printf("[DEBUG] perform_join_tests: join test size = %d. WME is:\n", jts.size());
+        //wme_t_show(wme);
 
         assert( wme != NULL );
 
         for (join_test_t& jt : jts) {
 
+            rs->join_tests++;
+
             // arg1 as value_t
             value_t arg1 = wme_t_value_of(wme, jt.field_of_arg1);
-            printf("\tWME1:\n");
-            wme_t_show(wme);
-            printf("\tfield of arg1: %d\n", jt.field_of_arg1);
+            //printf("\tWME1:\n");
+            //wme_t_show(wme);
+            //printf("\tfield of arg1: %d\n", jt.field_of_arg1);
 
             if (jt.type == join_test::DEFAULT || jt.type == join_test::VARIABLE) {
-                printf("token_t_get_nth_wme %p[%d]\n", token, jt.condition_of_arg2);
+                //printf("token_t_get_nth_wme %p[%d]\n", token, jt.condition_of_arg2);
                 wme_t* wme2 = token_t_get_nth_wme(token, jt.condition_of_arg2);
 
-                printf("\tWME2:\n");
-                wme_t_show(wme2);
-                printf("\tfield of arg2: %d\n", jt.field_of_arg2);
+                //printf("\tWME2:\n");
+                //wme_t_show(wme2);
+                //printf("\tfield of arg2: %d\n", jt.field_of_arg2);
 
                 assert( wme2 != NULL );
 
@@ -501,7 +520,7 @@ namespace rete {
                 }
                 result.vars.push_back(jt.variable);
 
-                printf("result.passed = %s\n", result.passed ? "true" : "false");
+                //printf("result.passed = %s\n", result.passed ? "true" : "false");
 
             } else if (jt.type == join_test::CONSTANT) {
                 if (!jt.comparator.function(arg1, jt.constant_value)) {
@@ -509,7 +528,7 @@ namespace rete {
                     return result;
                 }
                 result.vars.push_back(jt.variable);
-                printf("constant join test result.passed = %s\n", result.passed ? "true" : "false");
+                //printf("constant join test result.passed = %s\n", result.passed ? "true" : "false");
             }
         }
 
@@ -517,15 +536,15 @@ namespace rete {
     }/* }}}*/
     token_t* token_t_init(rete_t* rs, token_t* parent, wme_t* wme, std::vector<var_t> vars)/* {{{*/
     {
-        printf("creating token for wme: %s, %s\n", wme->identifier, wme->attribute);
-        wme_t_show(wme);
+        //printf("creating token for wme: %s, %s\n", wme->identifier, wme->attribute);
+        //wme_t_show(wme);
         token_t* new_token = new token_t();
         new_token->parent = parent;
         new_token->wme = wme;
         new_token->vars = vars;
 
         rs->token_count++;
-        printf("[DEBUG] token count increased to: %d\n", rs->token_count);
+        //printf("[DEBUG] token count increased to: %d\n", rs->token_count);
 
         return new_token;
     }/* }}}*/
@@ -551,13 +570,16 @@ namespace rete {
                                    beta_node_t* bn, token_t* parent_token, wme_t* wme,
                                    std::vector<var_t> vars, wme::operation::type wme_op)
     {
-        printf("[DEBUG] beta_node_t_left_activate called\n");
+        //printf("[DEBUG] beta_node_t_left_activate called\n");
+
+        rs->beta_node_activations++;
+
         switch (wme_op) {
             case wme::operation::ADD: {
                 token_t* new_token = token_t_init(rs, parent_token, wme, vars);
                 beta_node_t_add_token(bn, new_token);
-                printf("\tIN beta_node_t_left_activate\n");
-                token_t_show(new_token);
+                //printf("\tIN beta_node_t_left_activate\n");
+                //token_t_show(new_token);
                 // TODO: skip below if atomic
                 left_activate_join_nodes(rs, bn->join_nodes, new_token, wme_op);
             }
@@ -580,7 +602,7 @@ namespace rete {
     void rete_t_add_activated_production_node(rete_t* rs, production_node_t* pn,/* {{{*/
                                               token_t* token)
     {
-        printf("rete_t_add_activated_production_node: %s\n", pn->rule_name.c_str());
+        //printf("rete_t_add_activated_production_node: %s\n", pn->rule_name.c_str());
 
         activated_production_node_t activated;
         activated.wme_op = wme::operation::ADD;
@@ -597,6 +619,15 @@ namespace rete {
         activated.token = token;
 
         rs->conflict_set.push_back(activated);
+    }/* }}}*/
+
+    void rete_t_reset_stats(rete_t* rs)/* {{{*/
+    {
+        rs->alpha_node_activations = 0;
+        rs->beta_node_activations = 0;
+        rs->join_node_activations = 0;
+        rs->production_node_activations = 0;
+        rs->join_tests = 0;
     }/* }}}*/
 
     /*
@@ -720,21 +751,21 @@ namespace rete {
     }/* }}}*/
     void activate_alpha_nodes_for_wme(rete_t* rs, wme_t* wme, wme::operation::type wme_op)/* {{{*/
     {
-        printf("[DEBUG] activate_alpha_nodes_for_wme\n");
-        wme_t_show(wme);
+        //printf("[DEBUG] activate_alpha_nodes_for_wme\n");
+        //wme_t_show(wme);
         for (condition_t& condition : wme_t_derive_conditions_for_lookup(wme)) {
-            printf("[DEBUG] derived condition:\n");
-            condition_t_show(condition);
+            //printf("[DEBUG] derived condition:\n");
+            //condition_t_show(condition);
             alpha_node_t* am = lookup_alpha_memory_for_condition(rs, condition);
             if (am) {
-                printf("FOUND AM TO ACTIVATE %p\n", am);
+                //printf("FOUND AM TO ACTIVATE %p\n", am);
                 alpha_node_t_activate(rs, am, wme, wme_op);
             }
         }
     }/* }}}*/
     void rete_t_add_wme(rete_t* rs, wme_t* wme)/* {{{*/
     {
-        printf("[DEBUG] rete_t_add_wme\n");
+        //printf("[DEBUG] rete_t_add_wme\n");
 
         assert( rete_t_find_wme(rs, wme->identifier, wme->attribute) == NULL );
 
@@ -768,13 +799,16 @@ namespace rete {
                                          wme_t* wme, std::vector<var_t> vars,
                                          wme::operation::type wme_op)
     {
-        printf("[DEBUG] production_node_t_left_activate\n");
+        //printf("[DEBUG] production_node_t_left_activate\n");
+
+        rs->production_node_activations++;
+
         switch(wme_op) {
             case wme::operation::ADD: {
                 token_t* new_token = token_t_init(rs, parent_token, wme, vars);
                 production_node_t_add_token(pn, new_token);
-                printf("\tIN production_node_t_left_activate\n");
-                token_t_show(new_token);
+                //printf("\tIN production_node_t_left_activate\n");
+                //token_t_show(new_token);
                 rete_t_add_activated_production_node(rs, pn, new_token);
             }
             return;
@@ -797,13 +831,13 @@ namespace rete {
                                                    wme_t* wme,
                                                    wme::operation::type wme_op)
     {
-        printf("[DEBUG] ================================= left_activate_after_successful_join_tests\n");
-        wme_t_show(wme);
-        token_t_show(token);
-        join_test_result result = perform_join_tests(jn->join_tests, token, wme);
+        //printf("[DEBUG] ================================= left_activate_after_successful_join_tests\n");
+        //wme_t_show(wme);
+        //token_t_show(token);
+        join_test_result result = perform_join_tests(rs, jn->join_tests, token, wme);
         if (result.passed)
         {
-            printf("JOIN TEST PASSED\n");
+            //printf("JOIN TEST PASSED\n");
             for (beta_node_t* child_bn : *jn->beta_memories) {
                 beta_node_t_left_activate(rs, child_bn, token, wme,
                         result.vars, wme_op);
@@ -818,11 +852,14 @@ namespace rete {
     void join_node_t_left_activate(rete_t* rs, join_node_t* jn, token_t* token,/* {{{*/
                                    wme::operation::type wme_op)
     {
-        printf("[DEBUG] join_node_t_left_activate: %p\n", jn);
+        //printf("[DEBUG] join_node_t_left_activate: %p\n", jn);
+
+        rs->join_node_activations++;
+
         std::vector<join_test_t> jts = jn->join_tests;
         // TODO: handle unlinking here (line 1536 in w2 knottying)
         for (wme_t* wme : jn->alpha_memory->wmes) {
-            printf("prepare join test for WME:\n");
+            //printf("prepare join test for WME:\n");
             wme_t_show(wme);
             left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op);
         }
@@ -830,10 +867,13 @@ namespace rete {
     void join_node_t_right_activate(rete_t* rs, join_node_t* jn, wme_t* wme,/* {{{*/
                                     wme::operation::type wme_op)
     {
-        printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
+        //printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
         // TODO: handle unlinking logic here
-        printf("parent beta memory of this join node: %p\n", jn->parent_beta_memory);
-        printf("parent beta memory token count: %d\n", jn->parent_beta_memory->tokens.size());
+        //printf("parent beta memory of this join node: %p\n", jn->parent_beta_memory);
+        //printf("parent beta memory token count: %d\n", jn->parent_beta_memory->tokens.size());
+
+        rs->join_node_activations++;
+
         for (token_t* token : jn->parent_beta_memory->tokens) {
             left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op);
         }
@@ -846,7 +886,7 @@ namespace rete {
     }/* }}}*/
     void beta_node_t_update_matches(rete_t* rs, beta_node_t* bn)/* {{{*/
     {
-        printf("[DEBUG] beta_node_t_update_matches\n");
+        //printf("[DEBUG] beta_node_t_update_matches\n");
         if (bn->parent_join_node) {
             std::vector<beta_node_t*>* current_bm_children = bn->parent_join_node->beta_memories;
             std::vector<beta_node_t*>* tmp_children = new std::vector<beta_node_t*>();
@@ -854,11 +894,11 @@ namespace rete {
 
             bn->parent_join_node->beta_memories = tmp_children;
 
-            printf("[DEBUG] bn->parent_join_node->beta_memories(%p) (before)[size:%d]\n",
-                    bn->parent_join_node->beta_memories,
-                    bn->parent_join_node->beta_memories->size());
-            for (beta_node_t* bn2 : (*bn->parent_join_node->beta_memories))
-                printf("%p\n", bn2);
+            //printf("[DEBUG] bn->parent_join_node->beta_memories(%p) (before)[size:%d]\n",
+                    //bn->parent_join_node->beta_memories,
+                    //bn->parent_join_node->beta_memories->size());
+            //for (beta_node_t* bn2 : (*bn->parent_join_node->beta_memories))
+                //printf("%p\n", bn2);
 
             for (wme_t* wme : bn->parent_join_node->alpha_memory->wmes) {
                 join_node_t_right_activate(rs, bn->parent_join_node,
@@ -867,11 +907,11 @@ namespace rete {
 
             bn->parent_join_node->beta_memories = current_bm_children;
 
-            printf("[DEBUG] bn->parent_join_node->beta_memories(%p) (after)[size:%d]\n",
-                    bn->parent_join_node->beta_memories,
-                    bn->parent_join_node->beta_memories->size());
-            for (beta_node_t* bn2 : *bn->parent_join_node->beta_memories)
-                printf("%p\n", bn2);
+            //printf("[DEBUG] bn->parent_join_node->beta_memories(%p) (after)[size:%d]\n",
+                    //bn->parent_join_node->beta_memories,
+                    //bn->parent_join_node->beta_memories->size());
+            //for (beta_node_t* bn2 : *bn->parent_join_node->beta_memories)
+                //printf("%p\n", bn2);
 
             delete tmp_children;
         }
@@ -942,14 +982,14 @@ namespace rete {
         value_t v = wme->value;
 
         std::vector<condition_t> cs;
-        cs.push_back(condition_t(w, w, w));
-        cs.push_back(condition_t(w, w, v));
-        cs.push_back(condition_t(w, a, w));
-        cs.push_back(condition_t(i, w, w));
-        cs.push_back(condition_t(i, a, w));
-        cs.push_back(condition_t(w, a, v));
-        cs.push_back(condition_t(i, w, v));
-        cs.push_back(condition_t(i, a, v));
+        cs.push_back(condition_t_vvv(w, w, w));
+        cs.push_back(condition_t_vvx(w, w, v));
+        cs.push_back(condition_t_vav(w, a, w));
+        cs.push_back(condition_t_ivv(i, w, w));
+        cs.push_back(condition_t_iav(i, a, w));
+        cs.push_back(condition_t_vax(w, a, v));
+        cs.push_back(condition_t_ivx(i, w, v));
+        cs.push_back(condition_t_iax(i, a, v));
 
         return cs;
     }/* }}}*/
@@ -960,7 +1000,7 @@ namespace rete {
     }/* }}}*/
     void create_wme(rete_t* rs, const char* id, const char* attr, value_t val)/* {{{*/
     {
-        printf("\t[DEBUG] create_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
+        //printf("\t[DEBUG] create_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
         wme_t* wme = rete_t_find_wme(rs, id, attr);
         if (!wme) {
             wme = wme_t_init(rs, id, attr, val);
@@ -969,20 +1009,27 @@ namespace rete {
             change_wme(rs, wme, id, attr, val);
         }
     }/* }}}*/
-    void add_rule(rete_t* rs, rule_t& rule)/* {{{*/
+    void add_rule(rete_t* rs, rule_t rule)/* {{{*/
     {
+        //printf("rete_t* rs = %p\n", rs);
+        //printf("[DEBUG] ADDING RULE. Root beta node tokens: %d\n", rs->root_beta_node->tokens.size());
+        //printf("rule conditions size = %d\n", rule.conditions_size);
+        //printf("rule salience = %d\n", rule.salience);
+        //printf("rule name = %s\n", rule.name);
+        //printf("add_rule1\n");
         std::deque<condition_t> earlier_conditions;
         beta_node_t* current_bm = rs->root_beta_node;
-        printf("[DEBUG] ADDING RULE. Root beta node tokens: %d\n", rs->root_beta_node->tokens.size());
+        //printf("add_rule2\n");
         join_node_t* jn;
+        //printf("add_rule3\n");
         bool created;
 
         // follow path to the last join node responsible for this rule,
         // create any alpha, beta and join nodes on that path as
         // necessary.
-        printf("length: %d\n", rule.conditions_size);
+        //printf("length: %d\n", rule.conditions_size);
         for (unsigned int i=0;i<rule.conditions_size;i++) {
-            printf("add_rule, condition loop => i: %d\n", i);
+            //printf("add_rule, condition loop => i: %d\n", i);
             alpha_node_t* am = build_or_share_alpha_node_t(rs, rule.conditions[i]);
             std::vector<join_test_t> tests = condition_t_get_join_tests(rule.conditions[i], earlier_conditions);
             jn = build_or_share_join_node_t(rs, current_bm, am, tests, created);
@@ -1093,39 +1140,39 @@ namespace rete {
 
         // TODO: we only support variable in one position, if we want to support the same
         // variable in many fields in the same condition then we need to add more join tests.
-        printf("var: %s\n", var.name);
-        printf("earlier_vars.has_id: %d\n", earlier_vars.has_id);
-        printf("earlier_vars.id_var: %s\n", earlier_vars.id_var.name);
-        printf("earlier_vars.has_attr: %d\n", earlier_vars.has_attr);
-        printf("earlier_vars.attr_var: %s\n", earlier_vars.attr_var.name);
-        printf("earlier_vars.has_value: %d\n", earlier_vars.has_value);
-        printf("earlier_vars.value_var: %s\n", earlier_vars.value_var.name);
+        //printf("var: %s\n", var.name);
+        //printf("earlier_vars.has_id: %d\n", earlier_vars.has_id);
+        //printf("earlier_vars.id_var: %s\n", earlier_vars.id_var.name);
+        //printf("earlier_vars.has_attr: %d\n", earlier_vars.has_attr);
+        //printf("earlier_vars.attr_var: %s\n", earlier_vars.attr_var.name);
+        //printf("earlier_vars.has_value: %d\n", earlier_vars.has_value);
+        //printf("earlier_vars.value_var: %s\n", earlier_vars.value_var.name);
 
         maybe_join_test_t mjt;
 
         if (earlier_vars.has_id && earlier_vars.id_var == var) {
             jt.field_of_arg2 = join_test::IDENTIFIER;
-            printf("IDENTIFIER chosen\n");
+            //printf("IDENTIFIER chosen\n");
             mjt.has_join_test = true;
         } else if (earlier_vars.has_attr && earlier_vars.attr_var == var) {
             jt.field_of_arg2 = join_test::ATTRIBUTE;
-            printf("ATTRIBUTE chosen\n");
+            //printf("ATTRIBUTE chosen\n");
             mjt.has_join_test = true;
         } else if (earlier_vars.has_value && earlier_vars.value_var == var) {
             jt.field_of_arg2 = join_test::VALUE;
-            printf("VALUE chosen\n");
+            //printf("VALUE chosen\n");
             mjt.has_join_test = true;
         } else {
-            printf("NONE chosen\n");
+            //printf("NONE chosen\n");
             mjt.has_join_test = false;
         }
 
         mjt.join_test = jt;
 
-        if (mjt.has_join_test)
-            printf("\tCREATED default join test. condition_of_arg2: %d. field_of_arg2: %d\n", jt.condition_of_arg2, jt.field_of_arg2);
-        else
-            printf("\tDid not create join test\n");
+        //if (mjt.has_join_test)
+            //printf("\tCREATED default join test. condition_of_arg2: %d. field_of_arg2: %d\n", jt.condition_of_arg2, jt.field_of_arg2);
+        //else
+            //printf("\tDid not create join test\n");
 
         return mjt;
     }/* }}}*/
@@ -1156,15 +1203,15 @@ namespace rete {
 
             if (earlier_vars.has_id && earlier_vars.id_var == jtc.var2) {
                 jt.field_of_arg2 = join_test::IDENTIFIER;
-                printf("IDENTIFIER chosen\n");
+                //printf("IDENTIFIER chosen\n");
                 mjt.has_join_test = true;
             } else if (earlier_vars.has_attr && earlier_vars.attr_var == jtc.var2) {
                 jt.field_of_arg2 = join_test::ATTRIBUTE;
-                printf("ATTRIBUTE chosen\n");
+                //printf("ATTRIBUTE chosen\n");
                 mjt.has_join_test = true;
             } else if (earlier_vars.has_value && earlier_vars.value_var == jtc.var2) {
                 jt.field_of_arg2 = join_test::VALUE;
-                printf("VALUE chosen\n");
+                //printf("VALUE chosen\n");
                 mjt.has_join_test = true;
             }
 
@@ -1172,10 +1219,10 @@ namespace rete {
 
         mjt.join_test = jt;
 
-        if (mjt.has_join_test)
-            printf("\tCREATED variable join test. condition_of_arg2: %d. field_of_arg2: %d\n", jt.condition_of_arg2, jt.field_of_arg2);
-        else
-            printf("\tDid not create join test\n");
+        //if (mjt.has_join_test)
+            //printf("\tCREATED variable join test. condition_of_arg2: %d. field_of_arg2: %d\n", jt.condition_of_arg2, jt.field_of_arg2);
+        //else
+            //printf("\tDid not create join test\n");
 
         return mjt;
     }/* }}}*/
@@ -1205,10 +1252,10 @@ namespace rete {
 
         mjt.join_test = jt;
 
-        if (mjt.has_join_test)
-            printf("\tCREATED constant join test\n");
-        else
-            printf("\tDid not create constant join test\n");
+        //if (mjt.has_join_test)
+            //printf("\tCREATED constant join test\n");
+        //else
+            //printf("\tDid not create constant join test\n");
 
         return mjt;
     }/* }}}*/
@@ -1320,17 +1367,17 @@ namespace rete {
     }/* }}}*/
     std::vector<join_test_t> condition_t_get_join_tests(condition_t& condition, std::deque<condition_t> earlier_conditions)/* {{{*/
     {
-        printf("[DEBUG] condition_t_get_join_tests\n");
+        //printf("[DEBUG] condition_t_get_join_tests\n");
         maybe_var_t current_vars = condition_t_find_variables(condition);
         std::vector<join_test_t> all_join_tests;
 
         // potential join tests
         int idx = 0;
         for (condition_t earlier_condition : earlier_conditions) {
-            printf("idx: %d\n", idx);
-            printf("condition vs earlier condition:\n");
-            condition_t_show(condition);
-            condition_t_show(earlier_condition);
+            //printf("idx: %d\n", idx);
+            //printf("condition vs earlier condition:\n");
+            //condition_t_show(condition);
+            //condition_t_show(earlier_condition);
             maybe_var_t earlier_vars = condition_t_find_variables(earlier_condition);
 
             // setup join tests
@@ -1340,12 +1387,12 @@ namespace rete {
             idx++;
         }
 
-        printf("all_join_tests size=%d\n", all_join_tests.size());
+        //printf("all_join_tests size=%d\n", all_join_tests.size());
         return deduplicate_join_tests(all_join_tests);
     }/* }}}*/
     join_node_t* build_or_share_join_node_t(rete_t* rs, beta_node_t* bm, alpha_node_t* am, std::vector<join_test_t> jts, bool& created)/* {{{*/
     {
-        printf("[DEBUG] build_or_share_join_node_t\n");
+        //printf("[DEBUG] build_or_share_join_node_t\n");
         for ( join_node_t* jn : bm->join_nodes ) {
             if (jn->alpha_memory == am && join_tests_equal(jts, jn->join_tests)) {
                 created = false;
@@ -1355,7 +1402,7 @@ namespace rete {
 
         // no appropriate join node found, create one
         created = true;
-        printf("[DEBUG] creating join node with am: %p and bm: %p\n", am, bm);
+        //printf("[DEBUG] creating join node with am: %p and bm: %p\n", am, bm);
         join_node_t* new_jn = join_node_t_init(bm, am, jts);
         alpha_node_t_add_join_node(am, new_jn);
         beta_node_t_add_join_node(bm, new_jn);
@@ -1381,16 +1428,16 @@ namespace rete {
     }/* }}}*/
     beta_node_t* build_or_share_beta_node_t(rete_t* rs, join_node_t* jn)/* {{{*/
     {
-        printf("[DEBUG] build_or_share_beta_node_t\n");
+        //printf("[DEBUG] build_or_share_beta_node_t\n");
         if (jn->beta_memories->empty()) {
-            printf("[DEBUG] build_or_share_beta_node_t: create new beta node\n");
+            //printf("[DEBUG] build_or_share_beta_node_t: create new beta node\n");
 
             beta_node_t* new_bm = beta_node_t_init(jn);
             join_node_t_add_beta_memory(jn, new_bm);
             beta_node_t_update_matches(rs, new_bm);
 
             rs->beta_memory_count++;
-            printf("beta_memory_count: %d\n", rs->beta_memory_count);
+            //printf("beta_memory_count: %d\n", rs->beta_memory_count);
 
             return new_bm;
         } else {
@@ -1399,7 +1446,7 @@ namespace rete {
     }/* }}}*/
     beta_node_t* beta_node_t_init()/* {{{*/
     {
-        printf("[DEBUG] creating new beta node\n");
+        //printf("[DEBUG] creating new beta node\n");
         beta_node_t* bm = new beta_node_t();
 
         bm->parent_join_node = NULL;
@@ -1409,7 +1456,7 @@ namespace rete {
     beta_node_t* beta_node_t_init(join_node_t* jn)/* {{{*/
     {
         beta_node_t* bm = new beta_node_t();
-        printf("[DEBUG] creating new beta (%p) node with join node as parent: %p\n", bm, jn);
+        //printf("[DEBUG] creating new beta (%p) node with join node as parent: %p\n", bm, jn);
 
         bm->parent_join_node = jn;
 
@@ -1433,7 +1480,7 @@ namespace rete {
         jn->beta_memories = new std::vector<beta_node_t*>();
         jn->production_node = NULL;
         jn->parent_beta_memory = bm;
-        printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p and alpha memory: %p\n", jn, bm, am);
+        //printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p and alpha memory: %p\n", jn, bm, am);
         jn->alpha_memory = am;
         jn->join_tests = jts;
 
@@ -1522,7 +1569,7 @@ namespace rete {
         rete_t* rs = new rete_t();
 
         rs->root_beta_node = beta_node_t_init();
-        printf("[DEBUG] ROOT BETA NODE: %p\n", rs->root_beta_node);
+        //printf("[DEBUG] ROOT BETA NODE: %p\n", rs->root_beta_node);
         rs->root_beta_node->tokens.push_back(token_t_dummy_init());
         rs->beta_memory_count++;
 
@@ -1530,6 +1577,8 @@ namespace rete {
     }/* }}}*/
     void rete_t_destroy(rete_t* rs)/* {{{*/
     {
+        //printf("[DEBUG] rete_t_destroy called\n");
+
         // from the root beta node, delete all tokens, then traverse down the network to seuentially delete instances
         beta_node_t_destroy(rs, rs->root_beta_node);
 
@@ -1543,4 +1592,183 @@ namespace rete {
         delete rs;
     }/* }}}*/
 
+    // condition_t functions
+    // 1) ???
+    condition_t condition_t_vvv(var_t id, var_t attr, var_t value) {/* {{{*/
+        //printf("id: %s\n", id.name);
+        //printf("attr: %s\n", attr.name);
+        //printf("value: %s\n", value.name);
+        condition_t c;
+        //printf("condition_t_vvv1\n");
+        c.identifier_as_var = id;
+        //printf("condition_t_vvv2\n");
+        c.attribute_as_var = attr;
+        //printf("condition_t_vvv3\n");
+        c.value_as_var = value;
+        //printf("condition_t_vvv4\n");
+
+        c.identifier_is_constant = false;
+        c.attribute_is_constant = false;
+        c.value_is_constant = false;
+
+        return c;
+    }/* }}}*/
+    // 2) x??
+    condition_t condition_t_ivv(id_t id, var_t attr, var_t value)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_val = id;
+        c.attribute_as_var = attr;
+        c.value_as_var = value;
+
+        c.identifier_is_constant = true;
+        c.attribute_is_constant = false;
+        c.value_is_constant = false;
+        return c;
+    }/* }}}*/
+    // 3) ?y?
+    condition_t condition_t_vav(var_t id, attr_t attr, var_t value)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_var = id;
+        c.attribute_as_val = attr;
+        c.value_as_var = value;
+
+        c.identifier_is_constant = false;
+        c.attribute_is_constant = true;
+        c.value_is_constant = false;
+        return c;
+    }/* }}}*/
+    // ?y? with join tests
+    condition_t condition_t_vavj(var_t id, attr_t attr, var_t value, join_test::condition_t* jts, int n)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_var = id;
+        c.attribute_as_val = attr;
+        c.value_as_var = value;
+
+        c.identifier_is_constant = false;
+        c.attribute_is_constant = true;
+        c.value_is_constant = false;
+        condition_t_copy_join_test_conditions(c, jts, n);
+        return c;
+    }/* }}}*/
+
+    condition_t condition_t_vavjv(var_t id, attr_t attr, var_t value, std::vector<join_test::condition_t> jts)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_var = id;
+        c.attribute_as_val = attr;
+        c.value_as_var = value;
+
+        c.identifier_is_constant = false;
+        c.attribute_is_constant = true;
+        c.value_is_constant = false;
+
+        for (join_test::condition_t ct : jts)
+            c.join_test_conditions.push_back(ct);
+
+        return c;
+    }/* }}}*/
+
+    // 4) ??z
+    condition_t condition_t_vvx(var_t id, var_t attr, value_t value)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_var = id;
+        c.attribute_as_var = attr;
+        c.value_as_val = value;
+
+        c.identifier_is_constant = false;
+        c.attribute_is_constant = false;
+        c.value_is_constant = true;
+        return c;
+    }/* }}}*/
+
+    // 5) ?yz
+    condition_t condition_t_vax(var_t id, attr_t attr, value_t value)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_var = id;
+        c.attribute_as_val = attr;
+        c.value_as_val = value;
+
+        c.identifier_is_constant = false;
+        c.attribute_is_constant = true;
+        c.value_is_constant = true;
+        return c;
+    }/* }}}*/
+
+    // 6) xy?
+    condition_t condition_t_iav(id_t id, attr_t attr, var_t value)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_val = id;
+        c.attribute_as_val = attr;
+        c.value_as_var = value;
+
+        c.identifier_is_constant = true;
+        c.attribute_is_constant = true;
+        c.value_is_constant = false;
+        return c;
+    }/* }}}*/
+
+    // 7) x?z
+    condition_t condition_t_ivx(id_t id, var_t attr, value_t value)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_val = id;
+        c.attribute_as_var = attr;
+        c.value_as_val = value;
+
+        c.identifier_is_constant = true;
+        c.attribute_is_constant = false;
+        c.value_is_constant = true;
+        return c;
+    }/* }}}*/
+    // 8) xyz
+    condition_t condition_t_iax(id_t id, attr_t attr, value_t value)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_val = id;
+        c.attribute_as_val = attr;
+        c.value_as_val = value;
+
+        c.identifier_is_constant = true;
+        c.attribute_is_constant = true;
+        c.value_is_constant = true;
+        return c;
+    }/* }}}*/
+
+    std::string condition_t_as_key(condition_t c) /* {{{*/
+    {
+        std::string result = "";
+
+        if (c.identifier_is_constant)
+            result += c.identifier_as_val.name;
+        else
+            result += "*";
+
+        result += ",";
+
+        if (c.attribute_is_constant)
+            result += c.attribute_as_val.name;
+        else
+            result += "*";
+
+        result += ",";
+
+        if (c.value_is_constant)
+            result += value_t_show(c.value_as_val);
+        else
+            result += "*";
+
+        return result;
+    }/* }}}*/
+    void condition_t_copy_join_test_conditions(condition_t& c, join_test::condition_t* jts, int n)/* {{{*/
+    {
+        for (int i=0;i<n;i++) {
+            c.join_test_conditions.push_back(jts[i]);
+        }
+    }/* }}}*/
 }
