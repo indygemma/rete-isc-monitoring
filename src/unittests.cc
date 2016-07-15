@@ -131,6 +131,7 @@ TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
     // tokens (successfully matched wmes) are created for "eye-colors blue", "height 170".
     // "jane age 25" depends on "?x age ?y", is at the end is not stored as a token after
     // the last join node.
+    printf(" token count: %d\n", rs->token_count );
     REQUIRE( (rs->token_count == 2) );
 
     rete::create_wme(rs, "jack", "age", rete::value_int(25));
@@ -409,6 +410,57 @@ TEST_CASE( "multiple variable binding from condition_t_get_join_tests" ) {/* {{{
     REQUIRE( tests[0].field_of_arg2 == rete::join_test::IDENTIFIER );
 }/* }}}*/
 
+TEST_CASE( "top or bottom conditions" ) {/* {{{*/
+    rete::rule_t r1;
+    r1.name = "r1";
+    r1.salience = 0;
+
+    rete::condition_t conditions[2] = {
+        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator")),
+        rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter"))
+    };
+
+    r1.conditions_size = 2;
+    r1.conditions = conditions;
+    r1.action = r1_handler;
+
+    rete::rule_t r2;
+    r2.name = "r2";
+    r2.salience = 0;
+
+    rete::condition_t r2_conditions[2] = {
+        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator")),
+        rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter-else"))
+    };
+
+    r2.conditions_size = 2;
+    r2.conditions = r2_conditions;
+    r2.action = r1_handler;
+
+    rete::rete_t* rs = rete::rete_t_init();
+    rete::add_rule(rs, r1);
+    rete::add_rule(rs, r2);
+
+    rete::create_wme(rs, "event_1", "type",     rete::value_string("readout-meter"));
+    rete::create_wme(rs, "vars", "accumulator", rete::value_int(0));
+
+    rete::create_wme(rs, "event_2", "type",     rete::value_string("readout-meter-else"));
+    //rete::create_wme(rs, "vars", "accumulator", rete::value_int(1));
+
+    // no matches because bob.position == fred.position
+    printf("activated production nodes: %d\n", rete::activated_production_nodes(rs));
+    printf("alpha memory count: %d\n", rs->alpha_memory_count);
+    printf("beta memory count: %d\n", rs->beta_memory_count);
+    printf("join nodes count: %d\n", rs->join_nodes_count);
+    printf("production nodes count: %d\n", rs->production_nodes_count);
+
+    //rete::trigger_activated_production_nodes(rs);
+
+    REQUIRE( (rete::activated_production_nodes(rs) == 2)  );
+
+    rete::rete_t_destroy(rs);
+
+}/* }}}*/
 // for later:
 // TODO: testWMERemovalWorks
 // TODO: testProductionNodeRemoval

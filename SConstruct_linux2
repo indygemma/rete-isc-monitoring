@@ -45,4 +45,5 @@ env["CXXFLAGS"]   = cxx_flags
 env.Program("bin/linux/rete", src + ["main.cc"], srcdir="src")
 env.Program("bin/linux/unittests", src + ["unittests.cc"], srcdir="src")
 env.Program("bin/linux/benchmark", src + ["benchmark.cc"], srcdir="src")
+env.Program("bin/linux/condition_order_benchmark", src + ["condition_order_benchmark.cc"], srcdir="src")
 env.SharedLibrary("bin/linux/rete.so", dll_src, srcdir="src")

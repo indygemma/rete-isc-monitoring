@@ -379,114 +379,6 @@ namespace rete {
     struct beta_node_t;
     struct join_node_t;
 
-    struct varmap_t {/* {{{*/
-        bool has_id; // has_id meaning there is a variable in the identifier field
-        bool has_attr;
-        bool has_value;
-
-        var_t id_var;
-        var_t attr_var;
-        var_t value_var;
-
-        id_t id;
-        attr_t attr;
-        value_t value;
-    };/* }}}*/
-    struct wme_t {/* {{{*/
-        char* identifier;
-        char* attribute;
-        value_t value;
-        std::vector<varmap_t> variables;
-    };/* }}}*/
-    struct maybe_var_t {/* {{{*/
-        bool has_id;
-        bool has_attr;
-        bool has_value;
-
-        var_t id_var;
-        var_t attr_var;
-        var_t value_var;
-    };/* }}}*/
-    struct alpha_node_t {/* {{{*/
-        std::deque<wme_t*> wmes;
-        std::deque<join_node_t*> join_nodes;
-        std::vector<condition_t> conditions;
-        std::vector<maybe_var_t> variables;
-    };/* }}}*/
-    struct token_t {/* {{{*/
-        token_t* parent; // optional
-        wme_t* wme;
-        std::vector<var_t> vars;
-
-        bool operator==(const token_t& other) const
-        {
-            if (parent != other.parent)
-                return false;
-
-            if (wme != other.wme)
-                return false;
-
-            int size1 = vars.size();
-            int size2 = other.vars.size();
-
-            if (size1 != size2)
-                return false;
-
-            for (int i=0;i<size1;i++)
-                if (!(vars.at(i) == other.vars.at(i)))
-                    return false;
-
-            return true;
-        }
-    };/* }}}*/
-
-    /* Represents the key to a hash table containing token_t*
-     * keys.
-     */
-    struct token_key_t/* {{{*/
-    {
-        token_key_t(token_t* token)
-        {
-            this->token = token;
-        }
-
-        bool operator==(const token_key_t &other) const
-        {
-            return token == other.token;
-        }
-
-        token_t* token;
-    };/* }}}*/
-    struct token_key_hasher/* {{{*/
-    {
-        std::size_t operator()(const token_key_t& k) const
-        {
-            using std::size_t;
-            using std::hash;
-            size_t seed = 0;
-
-            // parent
-            if (k.token->parent) {
-                seed = hash_combine(seed, token_key_hasher()(token_key_t(k.token->parent)));
-            }
-
-            // wme. If wme is not set, then we are dealing with a dummy token
-            if (k.token->wme) {
-                seed = hash_combine(seed,
-                        wme_key_hasher()(
-                            wme_key_t(
-                                k.token->wme->identifier,
-                                k.token->wme->attribute)));
-            }
-
-            // std::vector<var_t>
-            for (var_t& var : k.token->vars)
-                seed = hash_combine(seed, hash<std::string>()(var.name));
-
-            return seed;
-        }
-    };/* }}}*/
-
     struct join_test_t {/* {{{*/
         join_test::type type;
         join_test::condition_field field_of_arg1;
@@ -562,6 +454,116 @@ namespace rete {
         bool passed;
         std::vector<var_t> vars;
     };/* }}}*/
+
+    struct varmap_t {/* {{{*/
+        bool has_id; // has_id meaning there is a variable in the identifier field
+        bool has_attr;
+        bool has_value;
+
+        var_t id_var;
+        var_t attr_var;
+        var_t value_var;
+
+        id_t id;
+        attr_t attr;
+        value_t value;
+    };/* }}}*/
+    struct wme_t {/* {{{*/
+        char* identifier;
+        char* attribute;
+        value_t value;
+        std::vector<varmap_t> variables;
+    };/* }}}*/
+    struct maybe_var_t {/* {{{*/
+        bool has_id;
+        bool has_attr;
+        bool has_value;
+
+        var_t id_var;
+        var_t attr_var;
+        var_t value_var;
+    };/* }}}*/
+    struct alpha_node_t {/* {{{*/
+        std::deque<wme_t*> wmes;
+        std::deque<join_node_t*> join_nodes;
+        std::vector<condition_t> conditions;
+        std::vector<maybe_var_t> variables;
+        std::vector<std::vector<join_test_t>> const_tests;
+    };/* }}}*/
+    struct token_t {/* {{{*/
+        token_t* parent; // optional
+        wme_t* wme;
+        std::vector<var_t> vars;
+
+        bool operator==(const token_t& other) const
+        {
+            if (parent != other.parent)
+                return false;
+
+            if (wme != other.wme)
+                return false;
+
+            int size1 = vars.size();
+            int size2 = other.vars.size();
+
+            if (size1 != size2)
+                return false;
+
+            for (int i=0;i<size1;i++)
+                if (!(vars.at(i) == other.vars.at(i)))
+                    return false;
+
+            return true;
+        }
+    };/* }}}*/
+
+    /* Represents the key to a hash table containing token_t*
+     * keys.
+     */
+    struct token_key_t/* {{{*/
+    {
+        token_key_t(token_t* token)
+        {
+            this->token = token;
+        }
+
+        bool operator==(const token_key_t &other) const
+        {
+            return token == other.token;
+        }
+
+        token_t* token;
+    };/* }}}*/
+    struct token_key_hasher/* {{{*/
+    {
+        std::size_t operator()(const token_key_t& k) const
+        {
+            using std::size_t;
+            using std::hash;
+            size_t seed = 0;
+
+            // parent
+            if (k.token->parent) {
+                seed = hash_combine(seed, token_key_hasher()(token_key_t(k.token->parent)));
+            }
+
+            // wme. If wme is not set, then we are dealing with a dummy token
+            if (k.token->wme) {
+                seed = hash_combine(seed,
+                        wme_key_hasher()(
+                            wme_key_t(
+                                k.token->wme->identifier,
+                                k.token->wme->attribute)));
+            }
+
+            // std::vector<var_t>
+            for (var_t& var : k.token->vars)
+                seed = hash_combine(seed, hash<std::string>()(var.name));
+
+            return seed;
+        }
+    };/* }}}*/
+
     struct production_node_t {/* {{{*/
         join_node_t* parent_join_node;
         rule_action code;
@@ -617,6 +619,7 @@ namespace rete {
         int join_node_activations = 0;
         int production_node_activations = 0;
         int join_tests = 0;
+        int const_tests = 0;
 
     };/* }}}*/
     struct rule_t {/* {{{*/
@@ -696,6 +699,7 @@ namespace rete {
     // ALPHA NODE functions/* {{{*/
     alpha_node_t* alpha_node_t_init();
     void alpha_node_t_add_join_node(alpha_node_t*, join_node_t*);
+    void alpha_node_t_add_const_tests(alpha_node_t*, std::vector<join_test_t>);
     void alpha_node_t_add_wme(alpha_node_t*, wme_t*);
     void alpha_node_t_remove_wme(alpha_node_t*, wme_t*);
     void alpha_node_t_activate(rete_t*, alpha_node_t*, wme_t*, wme::operation::type);

@@ -480,6 +480,46 @@ namespace rete {
                 return "VALUE";
         }
     }/* }}}*/
+    join_test_result alpha_node_t_perform_const_tests(rete_t* rs, alpha_node_t* am, wme_t* wme)/* {{{*/
+    {
+        join_test_result result;
+        result.passed = true; // default to true
+
+        //printf("[DEBUG] alpha_node_t_perform_const_tests: join test size = %d. WME is:\n", jts.size());
+        //wme_t_show(wme);
+
+        assert( wme != NULL );
+
+        // if any const join test sets pass, we pass globally
+        bool set_passed;
+        for (auto jts : am->const_tests) {
+            set_passed = true;
+            for (auto jt : jts) {
+
+                rs->const_tests++;
+
+                // arg1 as value_t
+                value_t arg1 = wme_t_value_of(wme, jt.field_of_arg1);
+                //printf("\tWME1:\n");
+                //wme_t_show(wme);
+                //printf("\tfield of arg1: %d\n", jt.field_of_arg1);
+
+                if (!jt.comparator.function(arg1, jt.constant_value)) {
+                    set_passed = false;
+                }
+                result.vars.push_back(jt.variable);
+                    //printf("constant join test result.passed = %s\n", result.passed ? "true" : "false");
+            }
+            if (set_passed) {
+                result.passed = true;
+                return result;
+            } else {
+                result.passed = false;
+            }
+        }
+
+        return result;
+    }/* }}}*/
     join_test_result perform_join_tests(rete_t* rs, std::vector<join_test_t> jts, token_t* token, wme_t* wme)/* {{{*/
     {
         join_test_result result;
@@ -628,6 +668,7 @@ namespace rete {
         rs->join_node_activations = 0;
         rs->production_node_activations = 0;
         rs->join_tests = 0;
+        rs->const_tests = 0;
     }/* }}}*/
 
     /*
@@ -749,8 +790,10 @@ namespace rete {
             pn->code(ras);
         }
     }/* }}}*/
-    void activate_alpha_nodes_for_wme(rete_t* rs, wme_t* wme, wme::operation::type wme_op)/* {{{*/
+    bool activate_alpha_nodes_for_wme(rete_t* rs, wme_t* wme, wme::operation::type wme_op)/* {{{*/
     {
+        bool activated = false;
+
         //printf("[DEBUG] activate_alpha_nodes_for_wme\n");
         //wme_t_show(wme);
         for (condition_t& condition : wme_t_derive_conditions_for_lookup(wme)) {
@@ -758,10 +801,25 @@ namespace rete {
             //condition_t_show(condition);
             alpha_node_t* am = lookup_alpha_memory_for_condition(rs, condition);
             if (am) {
-                //printf("FOUND AM TO ACTIVATE %p\n", am);
-                alpha_node_t_activate(rs, am, wme, wme_op);
+                //auto result = alpha_node_t_perform_const_tests(rs, am, wme).passed;
+                //if (result) {
+                    activated = true;
+                    alpha_node_t_activate(rs, am, wme, wme_op);
+                    //if (am->const_tests.size() == 0) {
+                        //printf("FOUND AM TO ACTIVATE (NO CONST TESTS) %p\n", am);
+                        //activated = true;
+                        //alpha_node_t_activate(rs, am, wme, wme_op);
+                    //} else {
+                        //if (alpha_node_t_perform_const_tests(rs, am, wme).passed) {
+                            //printf("FOUND AM TO ACTIVATE (%d CONST TESTS) %p\n", am->const_tests.size(), am);
+                            //alpha_node_t_activate(rs, am, wme, wme_op);
+                            //activated = true;
+                        //}
+                    //}
+                //}
             }
         }
+        return activated;
     }/* }}}*/
     void rete_t_add_wme(rete_t* rs, wme_t* wme)/* {{{*/
     {
@@ -852,8 +910,7 @@ namespace rete {
     void join_node_t_left_activate(rete_t* rs, join_node_t* jn, token_t* token,/* {{{*/
                                    wme::operation::type wme_op)
     {
-        //printf("[DEBUG] join_node_t_left_activate: %p\n", jn);
-
+        printf("[DEBUG] join_node_t_left_activate: %p\n", jn);
         rs->join_node_activations++;
 
         std::vector<join_test_t> jts = jn->join_tests;
@@ -867,7 +924,7 @@ namespace rete {
     void join_node_t_right_activate(rete_t* rs, join_node_t* jn, wme_t* wme,/* {{{*/
                                     wme::operation::type wme_op)
     {
-        //printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
+        printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
         // TODO: handle unlinking logic here
         //printf("parent beta memory of this join node: %p\n", jn->parent_beta_memory);
         //printf("parent beta memory token count: %d\n", jn->parent_beta_memory->tokens.size());
@@ -995,12 +1052,13 @@ namespace rete {
     }/* }}}*/
     void change_wme(rete_t* rs, wme_t* wme, const char* id, const char* attr, value_t val)/* {{{*/
     {
+        printf("\t[DEBUG] change_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
         rete_t_remove_wme(rs, wme);
         create_wme(rs, id, attr, val);
     }/* }}}*/
     void create_wme(rete_t* rs, const char* id, const char* attr, value_t val)/* {{{*/
     {
-        //printf("\t[DEBUG] create_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
+        printf("\t[DEBUG] create_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
         wme_t* wme = rete_t_find_wme(rs, id, attr);
         if (!wme) {
             wme = wme_t_init(rs, id, attr, val);
@@ -1032,6 +1090,20 @@ namespace rete {
             //printf("add_rule, condition loop => i: %d\n", i);
             alpha_node_t* am = build_or_share_alpha_node_t(rs, rule.conditions[i]);
             std::vector<join_test_t> tests = condition_t_get_join_tests(rule.conditions[i], earlier_conditions);
+            std::vector<join_test_t> const_tests;
+            std::vector<join_test_t> join_tests;
+
+            for (auto jt : tests) {
+                if (jt.type == join_test::CONSTANT) {
+                    const_tests.push_back(jt);
+                } else {
+                    join_tests.push_back(jt);
+                }
+            }
+
+            alpha_node_t_add_const_tests(am, const_tests);
+
+            // jn = build_or_share_join_node_t(rs, current_bm, am, join_tests, created); // TODO: use this line when alpha nodes handle const joins
             jn = build_or_share_join_node_t(rs, current_bm, am, tests, created);
 
             // don't need beta node for the last condition
@@ -1456,7 +1528,7 @@ namespace rete {
     beta_node_t* beta_node_t_init(join_node_t* jn)/* {{{*/
     {
         beta_node_t* bm = new beta_node_t();
-        //printf("[DEBUG] creating new beta (%p) node with join node as parent: %p\n", bm, jn);
+        printf("[DEBUG] creating new beta (%p) node with join node as parent: %p\n", bm, jn);
 
         bm->parent_join_node = jn;
 
@@ -1480,7 +1552,7 @@ namespace rete {
         jn->beta_memories = new std::vector<beta_node_t*>();
         jn->production_node = NULL;
         jn->parent_beta_memory = bm;
-        //printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p and alpha memory: %p\n", jn, bm, am);
+        printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p and alpha memory: %p\n", jn, bm, am);
         jn->alpha_memory = am;
         jn->join_tests = jts;
 
@@ -1510,6 +1582,11 @@ namespace rete {
     void alpha_node_t_add_join_node(alpha_node_t* am, join_node_t* jn)/* {{{*/
     {
         am->join_nodes.push_front(jn);
+    }/* }}}*/
+    void alpha_node_t_add_const_tests(alpha_node_t* am, std::vector<join_test_t> const_tests)/* {{{*/
+    {
+        if (const_tests.size() > 0)
+            am->const_tests.push_back(const_tests);
     }/* }}}*/
     void beta_node_t_add_join_node(beta_node_t* bm, join_node_t* jn)/* {{{*/
     {
@@ -1569,7 +1646,7 @@ namespace rete {
         rete_t* rs = new rete_t();
 
         rs->root_beta_node = beta_node_t_init();
-        //printf("[DEBUG] ROOT BETA NODE: %p\n", rs->root_beta_node);
+        printf("[DEBUG] ROOT BETA NODE: %p\n", rs->root_beta_node);
         rs->root_beta_node->tokens.push_back(token_t_dummy_init());
         rs->beta_memory_count++;
 
