@@ -468,11 +468,17 @@ namespace rete {
         attr_t attr;
         value_t value;
     };/* }}}*/
+
+    struct alpha_node_t;
+    struct token_t;
+
     struct wme_t {/* {{{*/
         char* identifier;
         char* attribute;
         value_t value;
         std::vector<varmap_t> variables;
+        std::vector<alpha_node_t*> alpha_nodes;
+        std::vector<token_t*> tokens;
     };/* }}}*/
     struct maybe_var_t {/* {{{*/
         bool has_id;
@@ -490,10 +496,16 @@ namespace rete {
         std::vector<maybe_var_t> variables;
         std::vector<std::vector<join_test_t>> const_tests;
     };/* }}}*/
+
+    struct production_node_t;
+
     struct token_t {/* {{{*/
         token_t* parent; // optional
         wme_t* wme;
         std::vector<var_t> vars;
+        beta_node_t* beta_node;
+        production_node_t* production_node;
+        std::vector<token_t*> children;
 
         bool operator==(const token_t& other) const
         {
@@ -671,6 +683,7 @@ namespace rete {
         condition_t condition_t_vax(var_t id, attr_t attr, value_t value);
         // 6) xy?
         condition_t condition_t_iav(id_t id, attr_t attr, var_t value);
+        condition_t condition_t_iavjv(id_t id, attr_t attr, var_t value, std::vector<join_test::condition_t> jts);
         // 7) x?z
         condition_t condition_t_ivx(id_t id, var_t attr, value_t value);
         // 8) xyz

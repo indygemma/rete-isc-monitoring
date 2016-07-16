@@ -257,6 +257,7 @@ namespace rete {
     }/* }}}*/
     void alpha_node_t_remove_wme(alpha_node_t* an, wme_t* wme)/* {{{*/
     {
+        // TODO: improve this! this hass N iterations
         an->wmes.erase(std::remove(an->wmes.begin(), an->wmes.end(), wme), an->wmes.end());
     }/* }}}*/
     maybe_value_t lookup_var(rule_action_state_t ras, const char* varname)/* {{{*/
@@ -289,6 +290,8 @@ namespace rete {
                 wme_t_update_variables(wme, an->variables);
                 if (!alpha_node_t_wme_exists(an, wme)) {
                     alpha_node_t_add_wme(an, wme);
+                    // TODO: make sure this an does not exist in this wme
+                    wme->alpha_nodes.push_back(an);
                     for (join_node_t* jn : an->join_nodes) {
                         join_node_t_right_activate(rs, jn, wme, wme_op);
                     }
@@ -582,9 +585,14 @@ namespace rete {
         new_token->parent = parent;
         new_token->wme = wme;
         new_token->vars = vars;
+        new_token->beta_node = NULL;
+        new_token->production_node = NULL;
 
         rs->token_count++;
         //printf("[DEBUG] token count increased to: %d\n", rs->token_count);
+
+        wme->tokens.push_back(new_token);
+        parent->children.push_back(new_token);
 
         return new_token;
     }/* }}}*/
@@ -617,6 +625,7 @@ namespace rete {
         switch (wme_op) {
             case wme::operation::ADD: {
                 token_t* new_token = token_t_init(rs, parent_token, wme, vars);
+                new_token->beta_node = bn;
                 beta_node_t_add_token(bn, new_token);
                 //printf("\tIN beta_node_t_left_activate\n");
                 //token_t_show(new_token);
@@ -689,6 +698,8 @@ namespace rete {
                         //std::vector<activated_production_node_t> xs;
                         //rs->activated_production_table[key] = xs;
                     //}
+                    //printf("ADDING token to activated productions: %p\n", key);
+                    //token_t_show(apn.token);
 
                     rs->activated_production_table[key].push_back(apn);
                 }
@@ -831,17 +842,57 @@ namespace rete {
 
         activate_alpha_nodes_for_wme(rs, wme, wme::operation::ADD);
     }/* }}}*/
+
+    void delete_token_tree(rete_t* rs, token_t* token)
+    {
+        //printf("REMOVE TOKEN TREE %p\n", token);
+        for (token_t* t : token->children) {
+            if (t != NULL)
+                delete_token_tree(rs, t);
+        }
+
+        // TODO: improve performance!
+        if (token->beta_node != NULL) {
+            beta_node_t_remove_token(token->beta_node, token);
+        } else {
+            production_node_t_remove_token(token->production_node, token);
+        }
+
+        // TODO: improve performance
+        std::vector<token_t*> tmp;
+
+        tmp = token->wme->tokens;
+        tmp.erase(std::remove(tmp.begin(), tmp.end(), token), tmp.end());
+
+        // TODO: improve performance
+        if (token->parent != NULL) {
+            tmp = token->parent->children;
+            tmp.erase(std::remove(tmp.begin(), tmp.end(), token), tmp.end());
+        }
+
+        //token_t_destroy(rs, token);
+    }
+
     void rete_t_remove_wme(rete_t* rs, wme_t* wme)/* {{{*/
     {
         assert( rete_t_find_wme(rs, wme->identifier, wme->attribute) != NULL) ;
 
-        rs->wme_table.erase(wme_key_t(wme->identifier, wme->attribute));
-
         wme_table_type::const_iterator it = rs->wme_table.find(
                 wme_key_t(wme->identifier, wme->attribute));
         if (it != rs->wme_table.end()) {
-            activate_alpha_nodes_for_wme(rs, wme, wme::operation::DELETE);
+            // OLD
+            //activate_alpha_nodes_for_wme(rs, wme, wme::operation::DELETE);
+            
+            // NEW
+            for (alpha_node_t* an : wme->alpha_nodes) {
+                alpha_node_t_remove_wme(an, wme);
+                for (token_t* token : wme->tokens) {
+                    delete_token_tree(rs, token);
+                }
+            }
         }
+
+        rs->wme_table.erase(wme_key_t(wme->identifier, wme->attribute));
     }/* }}}*/
     wme_t* rete_t_find_wme(rete_t* rs, const char* id, const char* attr)/* {{{*/
     {
@@ -864,6 +915,7 @@ namespace rete {
         switch(wme_op) {
             case wme::operation::ADD: {
                 token_t* new_token = token_t_init(rs, parent_token, wme, vars);
+                new_token->production_node = pn;
                 production_node_t_add_token(pn, new_token);
                 //printf("\tIN production_node_t_left_activate\n");
                 //token_t_show(new_token);
@@ -910,7 +962,7 @@ namespace rete {
     void join_node_t_left_activate(rete_t* rs, join_node_t* jn, token_t* token,/* {{{*/
                                    wme::operation::type wme_op)
     {
-        printf("[DEBUG] join_node_t_left_activate: %p\n", jn);
+        //printf("[DEBUG] join_node_t_left_activate: %p\n", jn);
         rs->join_node_activations++;
 
         std::vector<join_test_t> jts = jn->join_tests;
@@ -924,7 +976,7 @@ namespace rete {
     void join_node_t_right_activate(rete_t* rs, join_node_t* jn, wme_t* wme,/* {{{*/
                                     wme::operation::type wme_op)
     {
-        printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
+        //printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
         // TODO: handle unlinking logic here
         //printf("parent beta memory of this join node: %p\n", jn->parent_beta_memory);
         //printf("parent beta memory token count: %d\n", jn->parent_beta_memory->tokens.size());
@@ -1052,13 +1104,13 @@ namespace rete {
     }/* }}}*/
     void change_wme(rete_t* rs, wme_t* wme, const char* id, const char* attr, value_t val)/* {{{*/
     {
-        printf("\t[DEBUG] change_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
+        //printf("\t[DEBUG] change_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
         rete_t_remove_wme(rs, wme);
         create_wme(rs, id, attr, val);
     }/* }}}*/
     void create_wme(rete_t* rs, const char* id, const char* attr, value_t val)/* {{{*/
     {
-        printf("\t[DEBUG] create_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
+        //printf("\t[DEBUG] create_wme: (%s, %s, %s)\n", id, attr, value_t_show(val).c_str());
         wme_t* wme = rete_t_find_wme(rs, id, attr);
         if (!wme) {
             wme = wme_t_init(rs, id, attr, val);
@@ -1090,18 +1142,18 @@ namespace rete {
             //printf("add_rule, condition loop => i: %d\n", i);
             alpha_node_t* am = build_or_share_alpha_node_t(rs, rule.conditions[i]);
             std::vector<join_test_t> tests = condition_t_get_join_tests(rule.conditions[i], earlier_conditions);
-            std::vector<join_test_t> const_tests;
-            std::vector<join_test_t> join_tests;
+            //std::vector<join_test_t> const_tests;
+            //std::vector<join_test_t> join_tests;
 
-            for (auto jt : tests) {
-                if (jt.type == join_test::CONSTANT) {
-                    const_tests.push_back(jt);
-                } else {
-                    join_tests.push_back(jt);
-                }
-            }
+            //for (auto jt : tests) {
+                //if (jt.type == join_test::CONSTANT) {
+                    //const_tests.push_back(jt);
+                //} else {
+                    //join_tests.push_back(jt);
+                //}
+            //}
 
-            alpha_node_t_add_const_tests(am, const_tests);
+            //alpha_node_t_add_const_tests(am, const_tests);
 
             // jn = build_or_share_join_node_t(rs, current_bm, am, join_tests, created); // TODO: use this line when alpha nodes handle const joins
             jn = build_or_share_join_node_t(rs, current_bm, am, tests, created);
@@ -1298,7 +1350,7 @@ namespace rete {
 
         return mjt;
     }/* }}}*/
-    maybe_join_test_t create_constant_join_test(int idx, join_test::condition_field field1, var_t var, maybe_var_t earlier_vars, join_test::condition_t jtc)/* {{{*/
+    maybe_join_test_t create_constant_join_test(int idx, join_test::condition_field field1, var_t var, join_test::condition_t jtc)/* {{{*/
     {
         // assumes that constant join tests are at the level of condition where both variables occur.
         // We will not look further past the current condition to find the variables.
@@ -1349,17 +1401,49 @@ namespace rete {
                 result.push_back(mvjt.join_test);
 
             // constant join test
-            maybe_join_test_t mcjt = create_constant_join_test(idx, field1, var, earlier_vars, jtc);
+            maybe_join_test_t mcjt = create_constant_join_test(idx, field1, var, jtc);
             if (mcjt.has_join_test)
                 result.push_back(mcjt.join_test);
         }
 
         return result;
     }/* }}}*/
+    std::vector<join_test_t> create_const_join_tests(int idx, maybe_var_t current_vars, std::vector<join_test::condition_t> join_test_conditions)/* {{{*/
+    {
+        std::vector<join_test_t> jts;
+
+        if (current_vars.has_id) {
+            for (join_test::condition_t& jtc : join_test_conditions) {
+                // constant join test
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, jtc);
+                if (mcjt.has_join_test)
+                    jts.push_back(mcjt.join_test);
+            }
+        }
+
+        if (current_vars.has_attr) {
+            for (join_test::condition_t& jtc : join_test_conditions) {
+                // constant join test
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, jtc);
+                if (mcjt.has_join_test)
+                    jts.push_back(mcjt.join_test);
+            }
+        }
+
+        if (current_vars.has_value) {
+            for (join_test::condition_t& jtc : join_test_conditions) {
+                // constant join test
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::VALUE, current_vars.value_var, jtc);
+                if (mcjt.has_join_test)
+                    jts.push_back(mcjt.join_test);
+            }
+        }
+
+        return jts;
+    }/* }}}*/
     std::vector<join_test_t> create_join_tests(int idx, maybe_var_t current_vars, maybe_var_t earlier_vars, std::vector<join_test::condition_t> join_test_conditions)/* {{{*/
     {
         std::vector<join_test_t> jts;
-        bool has_value = false;
 
         if (current_vars.has_id) {
             // default common variable binding test
@@ -1374,7 +1458,7 @@ namespace rete {
                     jts.push_back(mvjt.join_test);
 
                 // constant join test
-                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, earlier_vars, jtc);
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, jtc);
                 if (mcjt.has_join_test)
                     jts.push_back(mcjt.join_test);
             }
@@ -1393,7 +1477,7 @@ namespace rete {
                     jts.push_back(mvjt.join_test);
 
                 // constant join test
-                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, earlier_vars, jtc);
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, jtc);
                 if (mcjt.has_join_test)
                     jts.push_back(mcjt.join_test);
             }
@@ -1412,11 +1496,9 @@ namespace rete {
                     jts.push_back(mvjt.join_test);
 
                 // constant join test
-                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::VALUE, current_vars.value_var, earlier_vars, jtc);
-                if (mcjt.has_join_test) {
+                maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::VALUE, current_vars.value_var, jtc);
+                if (mcjt.has_join_test)
                     jts.push_back(mcjt.join_test);
-                    has_value = true;
-                }
             }
         }
 
@@ -1442,6 +1524,10 @@ namespace rete {
         //printf("[DEBUG] condition_t_get_join_tests\n");
         maybe_var_t current_vars = condition_t_find_variables(condition);
         std::vector<join_test_t> all_join_tests;
+
+        // filter out constant join tests at the first level!
+        std::vector<join_test_t> top_level_const_tests = create_const_join_tests(0, current_vars, condition.join_test_conditions);
+        all_join_tests.insert(all_join_tests.end(), top_level_const_tests.begin(), top_level_const_tests.end());
 
         // potential join tests
         int idx = 0;
@@ -1528,7 +1614,7 @@ namespace rete {
     beta_node_t* beta_node_t_init(join_node_t* jn)/* {{{*/
     {
         beta_node_t* bm = new beta_node_t();
-        printf("[DEBUG] creating new beta (%p) node with join node as parent: %p\n", bm, jn);
+        //printf("[DEBUG] creating new beta (%p) node with join node as parent: %p\n", bm, jn);
 
         bm->parent_join_node = jn;
 
@@ -1552,7 +1638,7 @@ namespace rete {
         jn->beta_memories = new std::vector<beta_node_t*>();
         jn->production_node = NULL;
         jn->parent_beta_memory = bm;
-        printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p and alpha memory: %p\n", jn, bm, am);
+        //printf("[DEBUG] join_node_t_init (%p) with parent_beta_memory: %p and alpha memory: %p\n", jn, bm, am);
         jn->alpha_memory = am;
         jn->join_tests = jts;
 
@@ -1646,7 +1732,7 @@ namespace rete {
         rete_t* rs = new rete_t();
 
         rs->root_beta_node = beta_node_t_init();
-        printf("[DEBUG] ROOT BETA NODE: %p\n", rs->root_beta_node);
+        //printf("[DEBUG] ROOT BETA NODE: %p\n", rs->root_beta_node);
         rs->root_beta_node->tokens.push_back(token_t_dummy_init());
         rs->beta_memory_count++;
 
@@ -1787,6 +1873,23 @@ namespace rete {
         c.identifier_is_constant = true;
         c.attribute_is_constant = true;
         c.value_is_constant = false;
+        return c;
+    }/* }}}*/
+
+    condition_t condition_t_iavjv(id_t id, attr_t attr, var_t value, std::vector<join_test::condition_t> jts)/* {{{*/
+    {
+        condition_t c;
+        c.identifier_as_val = id;
+        c.attribute_as_val = attr;
+        c.value_as_var = value;
+
+        c.identifier_is_constant = true;
+        c.attribute_is_constant = true;
+        c.value_is_constant = false;
+
+        for (join_test::condition_t ct : jts)
+            c.join_test_conditions.push_back(ct);
+
         return c;
     }/* }}}*/
 

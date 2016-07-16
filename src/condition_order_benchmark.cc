@@ -8,7 +8,14 @@ void noop(rete::rule_action_state_t ras) {
 
 void rhs_effect_shared_node(rete::rule_action_state_t ras) {
     rete::rete_t* rs = ras.rete_state;
+    //printf("RHS called!\n");
+    //printf("Activated production nodes:%d\n", rete::activated_production_nodes(rs) );
     rete::create_wme(rs, "vars", "accumulator", rete::value_int(5));
+    // we don't need to store the activated PNs, just clear them
+    rs->activated_production_table.clear();
+    //if (rete::activated_production_nodes(rs) > 0) {
+        //rete::trigger_activated_production_nodes(rs);
+    //}
 }
 
 void gen_random(char *s, const int len) {
@@ -33,11 +40,15 @@ int main(int argc, char** argv)
 
     rete::condition_t conditions1[2] = {
         rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter")),
-        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator"))
+        rete::condition_t_iavjv(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator"), {
+            rete::join_test::const_join( rete::var("accumulator"), rete::join_test::equal(),     rete::value_int(15) )
+        })
     };
 
     rete::condition_t conditions2[3] = {
-        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator")),
+        rete::condition_t_iavjv(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator"), {
+            rete::join_test::const_join( rete::var("accumulator"), rete::join_test::equal(),     rete::value_int(15) )
+        }),
         rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter"))
     };
 
@@ -64,11 +75,15 @@ int main(int argc, char** argv)
 
     rete::condition_t conditions3[2] = {
         rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter-else")),
-        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator"))
+        rete::condition_t_iavjv(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator"), {
+            rete::join_test::const_join( rete::var("accumulator"), rete::join_test::equal(),     rete::value_int(15) )
+        })
     };
 
     rete::condition_t conditions4[2] = {
-        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator")),
+        rete::condition_t_iavjv(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator"), {
+            rete::join_test::const_join( rete::var("accumulator"), rete::join_test::equal(),     rete::value_int(15) )
+        }),
         rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter-else"))
     };
 
@@ -108,9 +123,10 @@ int main(int argc, char** argv)
     }
 
     printf("submitting event stream N: %d\n", events_count);
-    rete::create_wme(rs, "vars", "accumulator", rete::value_int(10));
+    rete::create_wme(rs, "vars", "accumulator", rete::value_int(15));
+    rete::trigger_activated_production_nodes(rs);
     for (int i=0;i<events_count;i++) {
-        //printf("i:%d\n", i);
+        //printf("[Event i]:%d\n", i);
         rete::create_wme(rs, "event_1", "type",     rete::value_string("readout-meter"));
         //rete::create_wme(rs, "vars", "accumulator", rete::value_int(10));
         rete::trigger_activated_production_nodes(rs);
