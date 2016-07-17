@@ -47,6 +47,7 @@ namespace rete {
             FLOAT,
             BOOL,
             STRING,
+            EVENT,
             LIST,
             MAP
         };
@@ -57,6 +58,26 @@ namespace rete {
     std::size_t value_t_hash(value_t val);
     std::string value_t_show(value_t val);
 
+    struct event_t {/* {{{*/
+        const char* type;
+        int timestamp;
+        int value;
+
+        bool operator==(const event_t &other) const
+        {
+            if (strcmp(type, other.type) != 0)
+                return false;
+
+            if (timestamp != other.timestamp)
+                return false;
+
+            if (value != other.value)
+                return false;
+
+            return true;
+        }
+    }; /* }}}*/
+
     struct value_t {/* {{{*/
         value::type type;
         unsigned long n; // how many of the aggregated type values
@@ -65,6 +86,7 @@ namespace rete {
             float       as_float;
             bool        as_bool;
             const char* as_string;
+            event_t     as_event;
             // TODO: how to deal with list [value_t] and map [(value_t, value_t)]
             // TODO: how to hash these values so I can put these in the key of an unordered_map?
         };
@@ -92,6 +114,10 @@ namespace rete {
 
             if (type == value::STRING)
                 if (strcmp(as_string, other.as_string) != 0)
+                    return false;
+
+            if (type == value::EVENT)
+                if (!(as_event == other.as_event))
                     return false;
 
             // TODO: compare LIST
@@ -667,6 +693,7 @@ namespace rete {
         value_t value_float(float x);
         value_t value_bool(bool x);
         value_t value_string(const char* str);
+        value_t value_event(const char* event_type, int timestamp, int value);
 
         // 1) ???
         condition_t condition_t_vvv(var_t id, var_t attr, var_t value);

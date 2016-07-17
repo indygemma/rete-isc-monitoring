@@ -64,6 +64,17 @@ namespace rete {
         v.type = value::STRING;
         return v;
     }/* }}}*/
+    value_t value_event(const char* event_type, int timestamp, int value)/* {{{*/
+    {
+        value_t v;
+        v.as_event = event_t();
+        v.as_event.type = event_type;
+        v.as_event.timestamp = timestamp;
+        v.as_event.value = value;
+        v.n = 1;
+        v.type = value::EVENT;
+        return v;
+    }/* }}}*/
     std::size_t hash_combine(std::size_t seed, std::size_t hash_value)/* {{{*/
     {
         //return (hash_value ^ seed) * 1677619u;
@@ -82,6 +93,16 @@ namespace rete {
 
         if (val.type == value::STRING)
             return std::hash<std::string>()(val.as_string);
+
+        if (val.type == value::EVENT) {
+            event_t e = val.as_event;
+            std::size_t seed = 0;
+            seed = hash_combine(seed, std::hash<std::string>()(e.type));
+            seed = hash_combine(seed, std::hash<int>()(e.timestamp));
+            seed = hash_combine(seed, std::hash<int>()(e.value));
+            return seed;
+        }
+
 
         // TODO: hash LIST elements
         // TODO: hash MAP elements
