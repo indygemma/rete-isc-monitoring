@@ -115,25 +115,107 @@ void run(int rules_n,
 
     long runtime = std::chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
 
-    printf("%s,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld\n",
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
             native ? "native" : "non-native",
             existing_events_n,
             pre_or_post,
             events_n,
             rs->alpha_node_activations,
+            "activation",
+            "alpha node");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->beta_node_activations,
+            "activation",
+            "beta node");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->join_node_activations,
+            "activation",
+            "join node");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             (rs->alpha_node_activations +
              rs->beta_node_activations  +
              rs->join_node_activations),
+            "activation",
+            "total");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->alpha_memory_count,
+            "count",
+            "alpha node");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->beta_memory_count,
+            "count",
+            "beta node");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->join_nodes_count,
+            "count",
+            "join node");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->production_nodes_count,
+            "count",
+            "production node");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->token_count,
+            "count",
+            "tokens");
+
+    printf("%s,%d,%s,%d,%d,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
             rs->wme_count,
-            runtime
-          );
+            "count",
+            "wmes");
+
+    printf("%s,%d,%s,%d,%ld,%s,%s\n",
+            native ? "native" : "non-native",
+            existing_events_n,
+            pre_or_post,
+            events_n,
+            runtime,
+            "runtime",
+            "runtime");
+
     //printf("Activation Stats:\n");
     //printf("alpha nodes: %d\n", rs->alpha_node_activations);
     //printf("beta nodes: %d\n", rs->beta_node_activations);
@@ -154,24 +236,27 @@ void run(int rules_n,
 
 int main()
 {
-    run(-1, 1000, 0, "pre", false);
-    run(-1, 1000, 0, "pre", true);
-    run(-1, 1000, 0, "post", false);
-    run(-1, 1000, 0, "post", true);
+    printf("type,existing_events_n,existing_event_stream_type,events_n,value,result_type,label\n");
+    //run(-1, 1000, 0, "post", false);
+    //run(-1, 1000, 0, "post", true);
 
-    run(-1, 1000, 10, "pre", false);
-    run(-1, 1000, 10, "pre", true);
-    run(-1, 1000, 10, "post", false);
-    run(-1, 1000, 10, "post", true);
+    //run(-1, 1000, 10, "post", false);
+    //run(-1, 1000, 10, "post", true);
 
-    run(-1, 1000, 100, "pre", false);
-    run(-1, 1000, 100, "pre", true);
-    run(-1, 1000, 100, "post", false);
-    run(-1, 1000, 100, "post", true);
+    //run(-1, 1000, 100, "post", false);
+    //run(-1, 1000, 100, "post", true);
 
-    run(-1, 1000, 1000, "pre", false);
-    run(-1, 1000, 1000, "pre", true);
-    run(-1, 1000, 1000, "post", false);
-    run(-1, 1000, 1000, "post", true);
+    //run(-1, 1000, 250, "post", false);
+    //run(-1, 1000, 250, "post", true);
+
+    //run(-1, 1000, 500, "post", false);
+    //run(-1, 1000, 500, "post", true);
+
+    //run(-1, 1000, 750, "post", false);
+    //run(-1, 1000, 750, "post", true);
+
+    //run(-1, 1000, 1000, "post", false);
+    //run(-1, 1000, 1000, "post", true);
+    run(-1, 1, 0, "post", false);
     return 0;
 }

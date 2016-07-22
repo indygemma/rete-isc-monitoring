@@ -265,20 +265,20 @@ int main2(int argc, char** argv)
 
 int main()
 {
-    run("top", 1, 100, "pre", 1000, true, true);
-    run("bottom", 1, 100, "pre", 1000, true, true);
-    run("top", 1, 100, "post", 1000, true, true);
-    run("bottom", 1, 100, "post", 1000, true, true);
+    run("top", 1, 1, "pre", 1000, true, true);
+    run("bottom", 1, 1, "pre", 1000, true, true);
+    run("top", 1, 1, "post", 1000, true, true);
+    run("bottom", 1, 1, "post", 1000, true, true);
 
-    run("top", 1, 100, "pre", 1000, true, false);
-    run("bottom", 1, 100, "pre", 1000, true, false);
-    run("top", 1, 100, "post", 1000, true, false);
-    run("bottom", 1, 100, "post", 1000, true, false);
+    run("top", 1, 1, "pre", 1000, true, false);
+    run("bottom", 1, 1, "pre", 1000, true, false);
+    run("top", 1, 1, "post", 1000, true, false);
+    run("bottom", 1, 1, "post", 1000, true, false);
 
-    run("top", 1, 100, "pre", 1000, false, false);
-    run("bottom", 1, 100, "pre", 1000, false, false);
-    run("top", 1, 100, "post", 1000, false, false);
-    run("bottom", 1, 100, "post", 1000, false, false);
+    run("top", 1, 1, "pre", 1000, false, false);
+    run("bottom", 1, 1, "pre", 1000, false, false);
+    run("top", 1, 1, "post", 1000, false, false);
+    run("bottom", 1, 1, "post", 1000, false, false);
 
     return 0;
 }
