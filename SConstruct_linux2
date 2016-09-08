@@ -20,8 +20,7 @@ link_flags = [
     "-g",
     "-Wall",
     "-Weffc++",
-    "-Wextra",
-    "-rdynamic" # this is required for exporting functions for luajit bindings
+    "-Wextra"
 ]
 
 cxx_flags = [
@@ -47,4 +46,27 @@ env.Program("bin/linux/unittests", src + ["unittests.cc"], srcdir="src")
 env.Program("bin/linux/benchmark", src + ["benchmark.cc"], srcdir="src")
 env.Program("bin/linux/condition_order_benchmark", src + ["condition_order_benchmark.cc"], srcdir="src")
 env.Program("bin/linux/false_sharing", src + ["false_sharing.cc"], srcdir="src")
-env.SharedLibrary("bin/linux/rete.so", dll_src, srcdir="src")
+#env.SharedLibrary("bin/linux/rete.so", dll_src, srcdir="src")
+env.StaticLibrary("bin/linux/librete.a", src, srcdir="src")
+
+# build python module for rete
+
+vars = sysconfig.get_config_vars('CC', 'CXX', 'OPT', 'BASECFLAGS', 'CCSHARED', 'LDSHARED', 'SO')
+for i in range(len(vars)):
+    if vars[i] is None:
+        vars[i] = ""
+(cc, cxx, opt, basecflags, ccshared, ldshared, so_ext) = vars
+flags = basecflags + " " + opt + " " + "-std=c++11" + " " + "-g" + " " + "-export-dynamic"
+ldshared = ldshared.replace("gcc", "g++")
+SharedLibrary("python/rete" + so_ext,
+              ["python/rete_bindings.cc", "src/rete.cc"],
+              LIBS=["python2.7", "dl", "util", "m", "rete"],
+              LIBPATH=["/usr/lib", "bin/linux"],
+              CXX=cxx,
+              SHLINK=ldshared,
+              SHLINKFLAGS=[],
+              SHLIBPREFIX="",
+              SHLIBSUFFIX=so_ext,
+              CPPPATH=[sysconfig.get_python_inc(), "src/include"],
+              CPPDEFINES={},
+              CPPFLAGS=flags)
