@@ -1,0 +1,119 @@
+- indexing on beta network
+
+    - according to wikipedia: "Memories are often implemented using
+      combinations of hash tables, and hash values are used to perform
+      conditional joins on subsets of WME lists and WMEs, rather than on the
+      entire contents of memories. This, in turn, often significantly reduces
+      the number of evaluations performed by the Rete network."
+
+- quantification / existential tests require extra nodes in the beta network
+
+- disjunctions work as expected: split each disjunction into conjunctions, each
+  conjunction path is a production node that are semantically the same.
+  Production activation deduplication is required in this case to not fire the
+  same production node multiple times.
+
+- McDemottetal 1978 suggests that state-saving using RETE might not be
+  worthwhile. Reasoning for this statement?
+
+  "It seems highly likely that for many production systems, the retesting cost
+  will be less than the cost of maintaining the network of sufficient tests."
+
+- LHS of a rule is equivalent to a query in relational database languages
+
+- select = alpha network, joins = beta network
+
+- disadvantages of rete networks:
+
+    - removal of WMEs requires retracing the adding path of the same fact
+      (possiblly removing previous join results)
+
+    - # of beta memories might become combinatorally explosive
+
+    - join operations are fixed after compiling the rete network
+
+    - to maintain consistency, even non-active rules will be computed.
+
+- TREAT motivating observations:
+
+    - adding a new fact e.g. (A 2) will only add new tokens that are related to
+      this fact. => where conditions contain variables matching (A 2)
+
+    - removing an existing fact e.g. (A 2) will not only remove tokens that are
+      related to this fact.
+
+    - duplication of information state management: WME -> Tokens -> conflict set.
+      The conflict set includes all the necessary data being maintained in the
+      beta network.
+
+        => when removing facts, the conflict set can be directly consulted
+
+        => when adding facts, the conflict set can be consulted to find related facts.
+
+    - the preceeding holds if no negated nodes are considered. When negation
+      comes into play: There are 4 cases:
+
+        1) addition of facts for positive conditions
+            -> same as above
+
+        2) removal of facts for positive conditions
+            -> same as above
+
+        3) addition of facts that partially match negative condition elements
+
+            -> the partially matched negative condition elements are temporaly
+            considered positive and the new WME is used as seed to (find
+            related facts) build instantiations of this new rule. Those
+            instantiations that are in the conflict set are removed.
+            Computational-wise, this is equal to RETE.
+
+        4) removal of facts that partially match negative condition elements
+
+            -> in this case the removal of the element may permit rule
+            instantiations to enter the conflict set. These instantiations are
+            precisely those that would enter had the condition element been
+            positive and the WME had just been added. There may, however, be
+            anothe WME similar to the removed WME that continues to prevent
+            these new instantiations from entering the conflict set. Such an
+            element would necessarily satisfy the negated condition element
+            precisely the same way as the removed element, i.e. of the pattern
+            matching attributes tested by the condition element all the
+            constant values and variable bindings must be the same as the
+            removed element. Before searching for new instantiations of rule,
+            working memory may be scanned for such an element. In the
+            implementation reported here it was simpler to scan for these at
+            the end of the search. In the five measured systems such an element
+            was never found.
+
+- paper note: IUPC patterns (structural patterns come from Activity life cycle)
+
+- from TREAT paper: "It has been reported that 90% of the execution time of a
+  production system is spent in the match phase. Evidence suggests that in the
+  RETE-OP5 implementation the majority of the match time is spent in performing
+  variable binding and maintaining the beta-memory nodes [Gupta84b]. The
+  critical difference between the algorithms is the method used to handle
+  variable binding."
+
+- TREAT paper: ftp://ftp.cs.utexas.edu/pub/AI-Lab/tech-reports/UT-AI-TR-87-58.pdf
+
+- TREAT paper talks (p. 15) about hashing as a general method for improving
+  performance. So does Doorenbos in his PhD.
+
+- TREAT paper does discuss condition ordering called join optimization: static
+  order, seed ordering. (1) static order = lexical order of condition elements
+  (2) seed order = order by changed AM. TREAT paper conclusion: TREAT w/ seed
+  order optimization always outperforms RETE by having fewer
+  computations/comparisons.
+
+- TREAT does not have beta-memory. Lack of maintenance and fewer comparisons is
+  a worthwhile space/time tradeoff.
+
+- is it possible that my rete implementation is not correct regarding joins of
+  beta memory tokens with the join node's associated WMEs inside the alpha
+  memories? => when the related number of WMEs are big, then subsequent
+  frequent updates are very costly.
+
+- see my handwritten notes of 7.7.2016 for notes about EC to Rete conditions
+
+- matching should occur only if all triples that represent one block (event,
+  fluent, etc.) have been submitted, to avoid unnecessary work.
