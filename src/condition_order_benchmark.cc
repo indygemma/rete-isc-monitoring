@@ -3,11 +3,11 @@
 #include "include/rete.h"
 #include <chrono>
 
-void noop(rete::rule_action_state_t ras) {
+void noop(rete::rule_action_state_t ras, void* extra_context) {
 
 }
 
-void rhs_effect_shared_node_success(rete::rule_action_state_t ras) {
+void rhs_effect_shared_node_success(rete::rule_action_state_t ras, void* extra_context) {
     rete::rete_t* rs = ras.rete_state;
     //printf("RHS called!\n");
     //printf("Activated production nodes:%d\n", rete::activated_production_nodes(rs) );
@@ -19,7 +19,7 @@ void rhs_effect_shared_node_success(rete::rule_action_state_t ras) {
     //}
 }
 
-void rhs_effect_shared_node_fail(rete::rule_action_state_t ras) {
+void rhs_effect_shared_node_fail(rete::rule_action_state_t ras, void* extra_context) {
     rete::rete_t* rs = ras.rete_state;
     //printf("RHS called!\n");
     //printf("Activated production nodes:%d\n", rete::activated_production_nodes(rs) );

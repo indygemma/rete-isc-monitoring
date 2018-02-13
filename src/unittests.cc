@@ -24,7 +24,7 @@ TEST_CASE( "Adding two seperate conditions to alpha memory" ) {/* {{{*/
 
     rete_t_destroy(r1);
 }/* }}}*/
-void r1_handler(rete::rule_action_state_t ras) {/* {{{*/
+void r1_handler(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
     printf("hello handler\n");
 }/* }}}*/
 TEST_CASE( "Add a single rule" ) {/* {{{*/
@@ -153,7 +153,7 @@ TEST_CASE( "Adding WME, count is respected" ) {/* {{{*/
     rete::rete_t_destroy(rs);
 
 }/* }}}*/
-void assert_z_x_handler(rete::rule_action_state_t ras)/* {{{*/
+void assert_z_x_handler(rete::rule_action_state_t ras, void* extra_context)/* {{{*/
 {
     rete::maybe_value_t z = rete::lookup_var(ras, "z");
     rete::maybe_value_t y = rete::lookup_var(ras, "y");
@@ -216,7 +216,7 @@ TEST_CASE( "Correct Production Nodes are activated" ) {/* {{{*/
     rete::rete_t_destroy(rs2);
 
 }/* }}}*/
-void x_z_comparator(rete::rule_action_state_t ras) {/* {{{*/
+void x_z_comparator(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
     rete::maybe_value_t x = rete::lookup_var(ras, "x");
     rete::maybe_value_t z = rete::lookup_var(ras, "z");
     REQUIRE( x.has_value );
@@ -226,7 +226,7 @@ void x_z_comparator(rete::rule_action_state_t ras) {/* {{{*/
 
     REQUIRE( xz_matches );
 }/* }}}*/
-void x_z_t_d_comparator(rete::rule_action_state_t ras) {/* {{{*/
+void x_z_t_d_comparator(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
     rete::maybe_value_t x = rete::lookup_var(ras, "x");
     rete::maybe_value_t z = rete::lookup_var(ras, "z");
     rete::maybe_value_t t = rete::lookup_var(ras, "t");
@@ -463,4 +463,5 @@ TEST_CASE( "top or bottom conditions" ) {/* {{{*/
 }/* }}}*/
 // for later:
 // TODO: testWMERemovalWorks
+// TODO: example: have conditions [c1, c2, c3], remove c2. What happens to the connections from c3 -> c2 -> c1, which now should be c3 -> c1
 // TODO: testProductionNodeRemoval

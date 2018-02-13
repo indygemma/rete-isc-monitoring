@@ -16,20 +16,26 @@ namespace rete {
         var_t v;
         //printf("var2\n");
         //printf("variable name:%s\n", name);
-        v.name = (char*)malloc(strlen(name)+1);
+        v.name = (char*)malloc(strlen(name)+1); // TODO: maintain all these allocations to free at destruction time
         //printf("var3\n");
         strcpy(v.name, name);
         //printf("var4\n");
+        //v.name = name;
         return v;
     }/* }}}*/
     id_t id(const char* name) {/* {{{*/
         id_t x;
-        x.name = name;
+        //x.name = name;
+        x.name = (char*)malloc(strlen(name)+1); // TODO: maintain all these allocations to free at destruction time
+        //printf("var3\n");
+        strcpy(x.name, name);
         return x;
     }/* }}}*/
     attr_t attr(const char* name) {/* {{{*/
         attr_t a;
-        a.name = name;
+        //a.name = name;
+        a.name = (char*)malloc(strlen(name)+1); // TODO: maintain all these allocations to free at destruction time
+        strcpy(a.name, name);
         return a;
     }/* }}}*/
     value_t value_int(int x)/* {{{*/
@@ -59,7 +65,10 @@ namespace rete {
     value_t value_string(const char* str)/* {{{*/
     {
         value_t v;
-        v.as_string = str;
+        //v.as_string = str;
+        v.as_string = (char*)malloc(strlen(str)+1); // TODO: maintain all these allocations to free at destruction time
+        //printf("var3\n");
+        strcpy(v.as_string, str);
         v.n = 1;
         v.type = value::STRING;
         return v;
@@ -819,7 +828,7 @@ namespace rete {
 
             assert( pn->code != NULL );
 
-            pn->code(ras);
+            pn->code(ras, pn->extra_context);
         }
     }/* }}}*/
     bool activate_alpha_nodes_for_wme(rete_t* rs, wme_t* wme, wme::operation::type wme_op)/* {{{*/
@@ -864,7 +873,7 @@ namespace rete {
         activate_alpha_nodes_for_wme(rs, wme, wme::operation::ADD);
     }/* }}}*/
 
-    void delete_token_tree(rete_t* rs, token_t* token)
+    void delete_token_tree(rete_t* rs, token_t* token)/* {{{*/
     {
         //printf("REMOVE TOKEN TREE %p\n", token);
         for (token_t* t : token->children) {
@@ -892,7 +901,7 @@ namespace rete {
         }
 
         //token_t_destroy(rs, token);
-    }
+    }/* }}}*/
 
     void rete_t_remove_wme(rete_t* rs, wme_t* wme)/* {{{*/
     {
@@ -1189,7 +1198,7 @@ namespace rete {
 
         // create production node if the join node has just been created
         if (created) {
-            production_node_t* pn = production_node_t_init(rule.name, rule.salience, jn, rule.action);
+            production_node_t* pn = production_node_t_init(rule.name, rule.salience, jn, rule.action, rule.extra_context);
             join_node_t_add_production_node(jn, pn);
             join_node_t_update_matches(rs, jn);
             rs->production_nodes_count++;
@@ -1197,12 +1206,13 @@ namespace rete {
 
         sync_activated_production_nodes(rs);
     }/* }}}*/
-    production_node_t* production_node_t_init(const char* name, int salience, join_node_t* jn, rule_action code)/* {{{*/
+    production_node_t* production_node_t_init(const char* name, int salience, join_node_t* jn, rule_action code, void* extra_context)/* {{{*/
     {
         production_node_t* new_pn = new production_node_t();
 
         new_pn->parent_join_node = jn;
         new_pn->code = code;
+        new_pn->extra_context = extra_context;
         //new_pn->tokens = [];
         new_pn->rule_name = name;
         new_pn->salience = salience;
@@ -1217,18 +1227,16 @@ namespace rete {
         delete pn;
     }/* }}}*/
     namespace join_test {/* {{{*/
-        bool equal_f(value_t& x, value_t& y)
+        bool equal_f(value_t& x, value_t& y)/* {{{*/
         {
             //printf("\tEQUAL check: %s == %s\n", value_t_show(x).c_str(), value_t_show(y).c_str());
             return x == y;
-        }
-
-        bool not_equal_f(value_t& x, value_t& y)
+        }/* }}}*/
+        bool not_equal_f(value_t& x, value_t& y)/* {{{*/
         {
             return !(x == y);
-        }
-
-        bool greater_than_f(value_t& x, value_t& y)
+        }/* }}}*/
+        bool greater_than_f(value_t& x, value_t& y)/* {{{*/
         {
             if (x.type != y.type)
                 return false;
@@ -1255,7 +1263,7 @@ namespace rete {
             // TODO: compare LIST
             // TODO: compare MAP
             return false;
-        }
+        }/* }}}*/
 
         condition_t var_join(var_t var1, comparator_t comparator, var_t var2) {/* {{{*/
             condition_t c;
@@ -1273,6 +1281,28 @@ namespace rete {
             c.t = CONSTANT;
             return c;
         }/* }}}*/
+
+        comparator_t equal()/* {{{*/
+        {
+          comparator_t c;
+          c.description = "equality test";
+          c.function = equal_f;
+          return c;
+        }/* }}}*/
+        comparator_t not_equal()/* {{{*/
+        {
+          comparator_t c;
+          c.description = "non-equality test";
+          c.function = not_equal_f;
+          return c;
+        }/* }}}*/
+        comparator_t greater_than() {/* {{{*/
+          comparator_t c;
+          c.description = "greater than test (>)";
+          c.function = greater_than_f;
+          return c;
+        }/* }}}*/
+
     }/* }}}*/
     maybe_join_test_t create_default_join_test(int idx, join_test::condition_field field1, var_t var, maybe_var_t earlier_vars)/* {{{*/
     {
@@ -1971,5 +2001,23 @@ namespace rete {
         for (int i=0;i<n;i++) {
             c.join_test_conditions.push_back(jts[i]);
         }
+    }/* }}}*/
+    void condition_t_copy(const condition_t& src, condition_t* dst)/* {{{*/
+    {
+        dst->identifier_as_var = src.identifier_as_var;
+        dst->identifier_as_val = src.identifier_as_val;
+        dst->attribute_as_var = src.attribute_as_var;
+        dst->attribute_as_val = src.attribute_as_val;
+        dst->value_as_var = src.value_as_var;
+        dst->value_as_val = src.value_as_val;
+
+        dst->identifier_is_constant = src.identifier_is_constant;
+        dst->attribute_is_constant = src.attribute_is_constant;
+        dst->value_is_constant = src.value_is_constant;
+
+        //for (auto join_test : src.join_test_conditions) {
+          //dst->join_test_conditions.push_back( join_test );
+        //}
+        dst->join_test_conditions = src.join_test_conditions;
     }/* }}}*/
 }

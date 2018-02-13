@@ -2,7 +2,7 @@
 #include <assert.h>
 #include "include/rete.h"
 
-void x_z_comparator(rete::rule_action_state_t ras) {/* {{{*/
+void x_z_comparator(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
     rete::maybe_value_t x = rete::lookup_var(ras, "x");
     rete::maybe_value_t z = rete::lookup_var(ras, "z");
     assert( x.has_value );
@@ -12,7 +12,7 @@ void x_z_comparator(rete::rule_action_state_t ras) {/* {{{*/
 
     assert( xz_matches );
 }/* }}}*/
-void x_z_t_d_comparator(rete::rule_action_state_t ras) {/* {{{*/
+void x_z_t_d_comparator(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
     rete::maybe_value_t x = rete::lookup_var(ras, "x");
     rete::maybe_value_t z = rete::lookup_var(ras, "z");
     rete::maybe_value_t t = rete::lookup_var(ras, "t");

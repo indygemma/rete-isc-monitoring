@@ -3,7 +3,7 @@
 #include "include/rete.h"
 #include <chrono>
 
-void noop(rete::rule_action_state_t ras) {
+void noop(rete::rule_action_state_t ras, void* extra_context) {
 
 }
 

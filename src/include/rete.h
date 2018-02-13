@@ -21,7 +21,7 @@ namespace rete {
 
     struct rete_t;
     struct rule_action_state_t;
-    typedef void (*rule_action)(rule_action_state_t);
+    typedef void (*rule_action)(rule_action_state_t, void* extra_context);
 
     struct var_t {/* {{{*/
         char* name;
@@ -35,10 +35,10 @@ namespace rete {
         }
     };/* }}}*/
     struct id_t {/* {{{*/
-        const char* name;
+        char* name;
     };/* }}}*/
     struct attr_t {/* {{{*/
-        const char* name;
+        char* name;
     };/* }}}*/
 
     namespace value {/* {{{*/
@@ -85,7 +85,7 @@ namespace rete {
             int         as_int;
             float       as_float;
             bool        as_bool;
-            const char* as_string;
+            char*       as_string;
             event_t     as_event;
             // TODO: how to deal with list [value_t] and map [(value_t, value_t)]
             // TODO: how to hash these values so I can put these in the key of an unordered_map?
@@ -165,24 +165,10 @@ namespace rete {
         bool not_equal_f(value_t& x, value_t& y);
         bool greater_than_f(value_t& x, value_t& y);
 
-        struct equal : comparator_t {/* {{{*/
-            equal() {
-                description = "equality test";
-                function = equal_f;
-            }
-        };/* }}}*/
-        struct not_equal : comparator_t {/* {{{*/
-            not_equal() {
-                description = "non-equality test";
-                function = not_equal_f;
-            }
-        };/* }}}*/
-        struct greater_than : comparator_t {/* {{{*/
-            greater_than() {
-                description = "greater than test (>)";
-                function = greater_than_f;
-            }
-        };/* }}}*/
+        comparator_t equal();
+        comparator_t not_equal();
+        comparator_t greater_than();
+
         const char* show_condition_field(condition_field&);
 
         struct condition_t {/* {{{*/
@@ -605,6 +591,7 @@ namespace rete {
     struct production_node_t {/* {{{*/
         join_node_t* parent_join_node;
         rule_action code;
+        void* extra_context;
         std::vector<token_t*> tokens;
         std::string rule_name;
         int salience;
@@ -666,6 +653,7 @@ namespace rete {
         unsigned int conditions_size;
         condition_t* conditions;
         rule_action action;
+        void* extra_context;
     };/* }}}*/
     struct rule_action_state_t {/* {{{*/
         rete_t* rete_state;
@@ -715,6 +703,8 @@ namespace rete {
         condition_t condition_t_ivx(id_t id, var_t attr, value_t value);
         // 8) xyz
         condition_t condition_t_iax(id_t id, attr_t attr, value_t value);
+
+        void condition_t_show(condition_t& condition);
     }
 
     std::vector<join_test_t> condition_t_get_join_tests(condition_t&, std::deque<condition_t>);
@@ -757,7 +747,7 @@ namespace rete {
     // JOIN TESTS functions/* {{{*/
     bool join_tests_equal(std::vector<join_test_t>, std::vector<join_test_t>);/* }}}*/
     // PRODUCTION NODE functions/* {{{*/
-    production_node_t* production_node_t_init(const char*, int, join_node_t*, rule_action);
+    production_node_t* production_node_t_init(const char*, int, join_node_t*, rule_action, void*);
     void production_node_t_left_activate(rete_t*, production_node_t*, token_t*, wme_t*,
                                          std::vector<var_t>, wme::operation::type);
     void production_node_t_add_token(production_node_t*, token_t*);
@@ -774,6 +764,7 @@ namespace rete {
     // condition_t functions/* {{{*/
     std::string condition_t_as_key(condition_t);
     void condition_t_copy_join_test_conditions(condition_t& c, join_test::condition_t* jts, int n);
+    void condition_t_copy(const condition_t& src, condition_t* dst);
 
     maybe_var_t condition_t_find_variables(condition_t&);/* }}}*/
 }
