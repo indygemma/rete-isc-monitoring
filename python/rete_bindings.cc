@@ -8,9 +8,9 @@
 namespace py = pybind11;
 
 void r1_handler(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
-  std::function<void()>* handler = (std::function<void()>*)extra_context;
+  std::function<void(rete::rule_action_state_t)>* handler = (std::function<void(rete::rule_action_state_t)>*)extra_context;
     //printf("hello handler from C++: %p\n", handler);
-    (*handler)();
+    (*handler)(ras);
 }/* }}}*/
 
 class rete_t
@@ -34,7 +34,7 @@ public:
         }
     }
 
-    void add_rule(std::string name, int salience, std::vector<rete::condition_t> conditions, std::function<void()> handler) {
+    void add_rule(std::string name, int salience, std::vector<rete::condition_t> conditions, std::function<void(rete::rule_action_state_t)> handler) {
       // TODO: implement add_rule
       rete::rule_t rule;
       rule.name = name.c_str();
@@ -75,7 +75,7 @@ public:
       rule.conditions_size = conditions.size();
       rule.conditions = conds;
       rule.action = r1_handler;
-      std::function<void()>* copied_handler = new std::function<void()>(handler);
+      std::function<void(rete::rule_action_state_t)>* copied_handler = new std::function<void(rete::rule_action_state_t)>(handler);
       rule.extra_context = (void*)copied_handler;
       all_handlers.push_back(copied_handler);
       //printf("on creation extra_context: %p\n", rule.extra_context);
@@ -90,7 +90,10 @@ public:
     int wme_count() { return inner->wme_count; }
     int activated_production_nodes() { return rete::activated_production_nodes(inner); }
 
-    void trigger_activated_production_nodes() { rete::trigger_activated_production_nodes(inner); }
+    void trigger_activated_production_nodes() {
+      //printf("called...\n");
+      rete::trigger_activated_production_nodes(inner);
+    }
 
 
     void create_wme_int(std::string id, std::string attribute, int value) {
@@ -111,7 +114,7 @@ public:
 
 private:
     rete::rete_t* inner;
-    std::vector<std::function<void()>*> all_handlers;
+    std::vector<std::function<void(rete::rule_action_state_t)>*> all_handlers;
 };
 
 PYBIND11_PLUGIN(rete) {
@@ -139,8 +142,28 @@ PYBIND11_PLUGIN(rete) {
     py::class_<rete::var_t>(m, "var_t");
     py::class_<rete::id_t>(m, "id_t");
     py::class_<rete::condition_t>(m, "condition_t");
-    py::class_<rete::value_t>(m, "value_t");
     py::class_<rete::attr_t>(m, "attr_t");
+    py::class_<rete::rule_action_state_t>(m, "rule_action_state_t");
+
+    m
+      .def("value_t_show", &rete::value_t_show)
+      ;
+
+    py::class_<rete::value_t>(m, "value_t")
+      .def_readonly("as_int", &rete::value_t::as_int)
+      .def_readonly("as_float", &rete::value_t::as_float)
+      .def_readonly("as_bool", &rete::value_t::as_bool)
+      .def_readonly("as_string", &rete::value_t::as_string)
+      // TODO: as_event
+      ;
+
+    py::class_<rete::maybe_value_t>(m, "maybe_value_t")
+      .def_readonly("has_value", &rete::maybe_value_t::has_value)
+      .def_readonly("value", &rete::maybe_value_t::value)
+      ;
+
+    m
+      .def("lookup_var", &rete::lookup_var);
 
     m
        // 1) ???

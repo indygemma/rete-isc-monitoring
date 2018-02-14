@@ -139,7 +139,7 @@ namespace rete {
     }/* }}}*/
     void wme_t_show(wme_t* wme)/* {{{*/
     {
-        //printf("\tWME: (%s, %s, %s)\n", wme->identifier, wme->attribute, value_t_show(wme->value).c_str());
+        printf("\tWME: (%s, %s, %s). vars size: %ld\n", wme->identifier, wme->attribute, value_t_show(wme->value).c_str(), wme->variables.size());
     }/* }}}*/
     void alpha_node_t_show(alpha_node_t* an)/* {{{*/
     {
@@ -198,6 +198,7 @@ namespace rete {
      */
     void wme_t_update_variables(wme_t* wme, std::vector<maybe_var_t> variables)/* {{{*/
     {
+        //printf("IN wme_t_update_variables. vars size: %ld\n", variables.size());
         std::vector<varmap_t> wme_variables;
 
         for (maybe_var_t& mvar : variables) {
@@ -207,16 +208,19 @@ namespace rete {
             varmap.has_value = mvar.has_value;
 
             if (varmap.has_id) {
+                //printf("has_id is true\n");
                 varmap.id_var = mvar.id_var;
                 varmap.id = id(wme->identifier);
             }
 
             if (varmap.has_attr) {
+                //printf("has_attr is true\n");
                 varmap.attr_var = mvar.attr_var;
                 varmap.attr = attr(wme->attribute);
             }
 
             if (varmap.has_value) {
+                //printf("has_value is true\n");
                 varmap.value_var = mvar.value_var;
                 varmap.value = wme->value;
             }
@@ -235,7 +239,7 @@ namespace rete {
         bool exists = std::find(an->wmes.begin(), an->wmes.end(), wme) != an->wmes.end();
         //printf("[DEBUG alpha_node_t_wme_exists? %s\n", bool_show(exists));
         //wme_t_show(wme);
-        alpha_node_t_show(an);
+        //alpha_node_t_show(an);
         return exists;
     }/* }}}*/
     void alpha_node_t_add_wme(alpha_node_t* an, wme_t* wme)/* {{{*/
@@ -258,9 +262,15 @@ namespace rete {
      */
     void alpha_node_t_associate_variables(alpha_node_t* am, condition_t& condition)/* {{{*/
     {
+        //printf("IN alpha_node_t_associate_variables\n");
         bool vi = !condition.identifier_is_constant;
         bool va = !condition.attribute_is_constant;
         bool vv = !condition.value_is_constant;
+
+        //printf("id var: %s, attr var: %s, value var: %s\n",
+            //vi ? "true" : "false",
+            //va ? "true" : "false",
+            //vv ? "true" : "false");
 
         maybe_var_t mvar;
         mvar.has_id    = vi;
@@ -278,6 +288,7 @@ namespace rete {
     }/* }}}*/
     void alpha_node_t_activate_matching_wmes(rete_t* rs, alpha_node_t* am, condition_t& condition)/* {{{*/
     {
+        //printf("IN alpha_node_t_activate_matching_wmes. alpha node variables size:%ld\n", am->variables.size());
         for (auto entry : rs->wme_table) {
             wme_t* wme = entry.second;
             if (wme_t_matches_condition(wme, condition)) {
@@ -295,7 +306,13 @@ namespace rete {
         maybe_value_t r;
         r.has_value = false;
 
-        auto it = ras.mapped_variables_table.find(varname);
+        //printf("table content:\n");
+        //for (auto i : ras.mapped_variables_table) {
+          //printf("key: %s\n", i.first.c_str());
+        //}
+        //typedef std::unordered_map<std::string, value_t> mapped_variables_type;
+        //printf("Lookup var: %s\n", varname);
+        auto it = ras.mapped_variables_table.find(std::string(varname));
         if (it != ras.mapped_variables_table.end()) {
             r.has_value = true;
             r.value = ras.mapped_variables_table[varname];
@@ -310,14 +327,18 @@ namespace rete {
     void alpha_node_t_activate(rete_t* rs, alpha_node_t* an, wme_t* wme,/* {{{*/
                                wme::operation::type wme_op)
     {
-        //printf("[DEBUG] alpha_node_t_activate\n");
+        //printf("[DEBUG] alpha_node_t_activate. alpha node vars: %ld\n", an->variables.size());
 
         rs->alpha_node_activations++;
 
         switch (wme_op)
         {
             case wme::operation::ADD: {
+                //printf("before wme_t_update_variables:\n");
+                //wme_t_show(wme);
                 wme_t_update_variables(wme, an->variables);
+                //printf("after wme_t_update_variables:\n");
+                //wme_t_show(wme);
                 if (!alpha_node_t_wme_exists(an, wme)) {
                     alpha_node_t_add_wme(an, wme);
                     // TODO: make sure this an does not exist in this wme
@@ -389,11 +410,12 @@ namespace rete {
     }/* }}}*/
     bool alpha_node_t_has_condition(alpha_node_t* am, condition_t& condition)/* {{{*/
     {
-        //printf("alpha_node_t_has_condition\n");
+        //printf("IN alpha_node_t_has_condition\n");
         for (condition_t& c : am->conditions) {
             if (condition_t_equal_vars(condition, c))
                 return true;
         }
+        return false;
     }/* }}}*/
     void alpha_node_t_associate_condition(alpha_node_t* am, condition_t& condition)/* {{{*/
     {
@@ -427,6 +449,8 @@ namespace rete {
      */
     alpha_node_t* add_condition(rete_t* rs, condition_t& condition, bool& created)/* {{{*/
     {
+        //printf("add_condition:\n");
+        //condition_t_show(condition);
         // lookup constants: id, attr, value
         alpha_node_t* maybe_am = lookup_alpha_memory_for_condition(rs, condition);
         if (!maybe_am) {
@@ -609,7 +633,7 @@ namespace rete {
     }/* }}}*/
     token_t* token_t_init(rete_t* rs, token_t* parent, wme_t* wme, std::vector<var_t> vars)/* {{{*/
     {
-        //printf("creating token for wme: %s, %s\n", wme->identifier, wme->attribute);
+        //printf("creating token for wme: %s, %s, wme vars size: %ld. vars size:%ld\n", wme->identifier, wme->attribute, wme->variables.size(), vars.size());
         //wme_t_show(wme);
         token_t* new_token = new token_t();
         new_token->parent = parent;
@@ -767,8 +791,10 @@ namespace rete {
     }/* }}}*/
     std::vector<varmap_t> filter_varmaps(std::vector<var_t> vars, std::vector<varmap_t> varmaps)/* {{{*/
     {
+        //printf("in filter_varmaps: left count: %ld, right count: %ld\n", vars.size(), varmaps.size());
         std::vector<varmap_t> result;
         for (varmap_t varmap : varmaps) {
+            //printf("varmap: %p\n", varmap);
             if (varmap_t_contains_vars(varmap, vars))
                 result.push_back(varmap);
         }
@@ -776,22 +802,31 @@ namespace rete {
     }/* }}}*/
     mapped_variables_type map_variables(token_t* token)/* {{{*/
     {
+        //printf("map_variables called...\n");
         mapped_variables_type mvars;
         token_t* parent = token;
 
         while (parent->parent != NULL) {
 
+            //printf("inside 1\n");
+            //printf("wme: id:%s, attr:%s, value:%s\n", parent->wme->identifier, parent->wme->attribute, value_t_show(parent->wme->value).c_str());
+            //printf("parent->vars size:%ld\n", parent->vars.size());
+            //printf("parent->wme->variables size:%ld\n", parent->wme->variables.size());
             std::vector<varmap_t> filtered = filter_varmaps(parent->vars, parent->wme->variables);
             for (varmap_t varmap : filtered) {
+                //printf("varmap_t: %p\n", varmap);
                 if (varmap.has_id) {
+                    //printf("MAP_VARIABLES(id): %s\n", varmap.id.name);
                     mvars[varmap.id_var.name] = value_string(varmap.id.name);
                 }
 
                 if (varmap.has_attr) {
+                    //printf("MAP_VARIABLES(attr): %s\n", varmap.attr.name);
                     mvars[varmap.attr_var.name] = value_string(varmap.attr.name);
                 }
 
                 if (varmap.has_value) {
+                    //printf("MAP_VARIABLES(value)\n");
                     mvars[varmap.value_var.name] = varmap.value;
                 }
             }
@@ -816,6 +851,7 @@ namespace rete {
         // clear all previously activated production nodes
         rs->activated_production_table.clear();
 
+        //printf("all_activated_pns count: %ld\n", all_activated_pns.size());
         for (activated_production_node_t apn : all_activated_pns) {
             token_t* token = apn.token;
             production_node_t* pn = apn.production_node;
@@ -972,6 +1008,7 @@ namespace rete {
                                                    wme::operation::type wme_op)
     {
         //printf("[DEBUG] ================================= left_activate_after_successful_join_tests\n");
+        //printf("wme vars size: %ld\n", wme->variables.size());
         //wme_t_show(wme);
         //token_t_show(token);
         join_test_result result = perform_join_tests(rs, jn->join_tests, token, wme);
@@ -992,21 +1029,22 @@ namespace rete {
     void join_node_t_left_activate(rete_t* rs, join_node_t* jn, token_t* token,/* {{{*/
                                    wme::operation::type wme_op)
     {
-        //printf("[DEBUG] join_node_t_left_activate: %p\n", jn);
+        //printf("[DEBUG] join_node_t_left_activate: %p\n", (void*)jn);
         rs->join_node_activations++;
 
         std::vector<join_test_t> jts = jn->join_tests;
         // TODO: handle unlinking here (line 1536 in w2 knottying)
         for (wme_t* wme : jn->alpha_memory->wmes) {
-            //printf("prepare join test for WME:\n");
-            wme_t_show(wme);
+            //printf("prepare join test for WME (vars size: %ld):\n", wme->variables.size());
+            //wme_t_show(wme);
             left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op);
         }
     }/* }}}*/
     void join_node_t_right_activate(rete_t* rs, join_node_t* jn, wme_t* wme,/* {{{*/
                                     wme::operation::type wme_op)
     {
-        //printf("[DEBUG] join_node_t_right_activate: %p\n", jn);
+        //printf("[DEBUG] join_node_t_right_activate: %p\n", (void*)jn);
+        //printf("wme vars size: %ld\n", wme->variables.size());
         // TODO: handle unlinking logic here
         //printf("parent beta memory of this join node: %p\n", jn->parent_beta_memory);
         //printf("parent beta memory token count: %d\n", jn->parent_beta_memory->tokens.size());
@@ -1040,6 +1078,8 @@ namespace rete {
                 //printf("%p\n", bn2);
 
             for (wme_t* wme : bn->parent_join_node->alpha_memory->wmes) {
+                //printf("processing wme\n");
+                //wme_t_show(wme);
                 join_node_t_right_activate(rs, bn->parent_join_node,
                                            wme, wme::operation::ADD);
             }

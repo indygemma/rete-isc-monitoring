@@ -1,7 +1,7 @@
 import rete
 
 # TODO: alternative: s-expr with custom VM to execution action part.
-def handler():# {{{
+def handler(ras):# {{{
     print "hello world from Python....HAHAHA"
 # }}}
 def test_var_var_var():# {{{
@@ -113,19 +113,48 @@ def test_id_attr_var(): # {{{
     assert r.activated_production_nodes() == 1 # little_fred, name, Fred
 # }}}
 def test_id_var_value():# {{{
+
+    def matcher(ras):
+        x = rete.value_t_show(rete.lookup_var(ras, "x").value)
+        z = rete.value_t_show(rete.lookup_var(ras, "z").value)
+        # print "matched attribute -> ", rete.lookup_var(ras, "x").has_value, x
+        # print "matched attribute -> ", rete.lookup_var(ras, "z").has_value, z
+        # print "matched attribute -> ", rete.lookup_var(ras, "x").has_value
+        # print "matched attribute -> ", rete.lookup_var(ras, "z").has_value
+        assert rete.lookup_var(ras, "x").has_value == True
+        assert rete.lookup_var(ras, "z").has_value == True
+        assert x == "daniel"
+        assert z == "daniel"
+        assert rete.lookup_var(ras, "x").value.as_string == "daniel"
+        assert rete.lookup_var(ras, "z").value.as_string == "daniel"
+
     r = rete.Rete()
     r.add_rule("sample rule", 0, [
-        rete.condition(rete.id("little_fred"), rete.var("name"), rete.value_string("Fred"))
-    ], handler)
+        # rete.condition(rete.id("little_fred"), rete.var("name"), rete.value_string("Fred"))
+        rete.condition(rete.var("x"), rete.attr("heartrate"),  rete.value_int(80)),
+        rete.condition(rete.var("x"), rete.attr("age"),        rete.var("t")),
+        rete.condition(rete.var("z"), rete.attr("height"),     rete.var("d"), [
+                rete.join_test.var_join( rete.var("z"), rete.join_test.equal(),     rete.var("x") ),
+                rete.join_test.var_join( rete.var("d"), rete.join_test.not_equal(), rete.var("t") )
+                ])
+    ], matcher)
 
     assert r.activated_production_nodes() == 0
 
-    r.create_wme("little_fred", "name", "Fred")
-    r.create_wme("little_fred", "age", "15")
-    r.create_wme("little_fred", "group", "WST")
-    r.create_wme("big_fred",    "name", "Fred")
+    # r.create_wme("little_fred", "name", "Fred")
+    # r.create_wme("little_fred", "age", "15")
+    # r.create_wme("little_fred", "group", "WST")
+    # r.create_wme("big_fred",    "name", "Fred")
+
+    r.create_wme("daniel", "heartrate", 80);
+    r.create_wme("daniel", "age",       25);
+    r.create_wme("daniel", "height",    30);
 
     assert r.activated_production_nodes() == 1 # little_fred, name, Fred
+
+    # print "before call"
+    r.trigger_activated_production_nodes()
+
 # }}}
 def test_id_attr_value():# {{{
     r = rete.Rete()
@@ -162,8 +191,6 @@ def main():# {{{
     # test_id_attr_var_join_tests()
     test_id_var_value()
     test_id_attr_value()
-
-    r.trigger_activated_production_nodes()
 
     # r.destroy()
 # }}}
