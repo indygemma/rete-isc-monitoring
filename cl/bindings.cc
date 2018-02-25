@@ -56,7 +56,16 @@ static unsigned int count_list(cl_object list) {/* {{{*/
   return count;
 }/* }}}*/
 
-static std::unordered_map<std::string, rete::rete_t*> ALL_RETE_INSTANCES;
+// used to store the lisp handler and the rete session key when a rule is activated
+struct rete_session_t {
+    std::string session_key;
+    rete::rete_t* rete_instance;
+    std::vector<rete::condition_t*> session_conditions;
+    std::vector<cl_object> session_action_handlers; // all action handlers registered for this session, which are lisp lambdas taking a single cl_object argument representing the result
+};
+
+static std::unordered_map<std::string, rete_session_t> ALL_RETE_SESSIONS;
+static std::unordered_map<std::string, rete::rule_action_state_t*> ALL_RULE_ACTION_STATES;
 
 void define_lisp_condition(const std::string& name) {/* {{{*/
   lisp(("(define-condition " + name + " (base-error) ((text :initarg :text :reader text)))").c_str());
@@ -129,14 +138,23 @@ bool is_var(cl_object x) {/* {{{*/
 /* }}}*/
 static cl_object rete_init() {/* {{{*/
   cl_object rete_id = lisp("(gensym \"rete\")");
-  ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_id)] = rete::rete_t_init();
+  ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_id)] = rete_session_t();
+  ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_id)].rete_instance = rete::rete_t_init();
   return rete_id;
 }
 /* }}}*/
 static cl_object rete_destroy(cl_object rete_instance) {/* {{{*/
   const std::string& key = ecl_symbol_to_string(rete_instance);
-  rete::rete_t_destroy(ALL_RETE_INSTANCES[key]);
-  ALL_RETE_INSTANCES.erase(key);
+
+  // destroy the rete instance
+  rete::rete_t_destroy(ALL_RETE_SESSIONS[key].rete_instance);
+
+  // deallocate session conditions
+  for (auto* conds : ALL_RETE_SESSIONS[key].session_conditions) {
+    delete [] conds;
+  }
+
+  ALL_RETE_SESSIONS.erase(key);
   return ECL_NIL;
 }
 /* }}}*/
@@ -368,13 +386,21 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
     //cond->join_test_conditions = join_test_conditions;
   }
 
-  std::cout << "condition join tests: " << cond->join_test_conditions.size() << std::endl;
+  //std::cout << "condition join tests: " << cond->join_test_conditions.size() << std::endl;
 
   return cond;
 }
 /* }}}*/
-void dispatch_handler(rete::rule_action_state_t, void* extra_context) {/* {{{*/
-  // TODO: dispatch to the correct callback
+void dispatch_handler(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
+  // dispatch to the correct callback
+  cl_object lisp_handler = (cl_object)extra_context;
+  cl_object rule_action_state_key = lisp("(gensym \"rule_action_state\")");
+  std::string key_as_string = ecl_symbol_to_string(rule_action_state_key);
+  ALL_RULE_ACTION_STATES[key_as_string] = &ras;
+  // call the lisp handler with the rule_action_state_key as parameter
+  funcall(2, lisp_handler, rule_action_state_key);
+  // after the lisp handler returns, remove the rule_action_state session
+  ALL_RULE_ACTION_STATES.erase(key_as_string);
 }
 /* }}}*/
 static cl_object make_rule(cl_object rete_instance, cl_object description, cl_object salience, cl_object conds, cl_object callback) {/* {{{*/
@@ -414,23 +440,27 @@ static cl_object make_rule(cl_object rete_instance, cl_object description, cl_ob
 
   rule.conditions_size = cond_count;
   rule.conditions = rete_conds;
-  for (unsigned int i=0; i<cond_count; i++) {
-    condition_t_show(rule.conditions[i]);
-    std::cout << "Before submission. There are " << rule.conditions[i].join_test_conditions.size() << " join tests for index " << i << std::endl;
-  }
+  //for (unsigned int i=0; i<cond_count; i++) {
+    //condition_t_show(rule.conditions[i]);
+    //std::cout << "Before submission. There are " << rule.conditions[i].join_test_conditions.size() << " join tests for index " << i << std::endl;
+  //}
   rule.action = dispatch_handler;
-  // TODO: pass lisp callback to rule.extra_context
 
-  rete::add_rule(ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_instance)],
+  // pass lisp callback to rule.extra_context
+  std::string session_key = ecl_symbol_to_string(rete_instance);
+  rule.extra_context = callback;
+
+  // maintain the newly allocated rete_conds for later deallocation
+  ALL_RETE_SESSIONS[session_key].session_conditions.push_back(rete_conds);
+
+  rete::add_rule(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance,
                  rule);
-
-  // TODO: might have to deallocate rete_conds after submitting to the rete engine
 
   return ECL_T;
 }
 /* }}}*/
 static cl_object activated_production_nodes(cl_object rete_instance) {/* {{{*/
-  return ecl_make_integer(rete::activated_production_nodes(ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_instance)]));
+  return ecl_make_integer(rete::activated_production_nodes(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance));
 }
 /* }}}*/
 static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object attr, cl_object value) {/* {{{*/
@@ -444,7 +474,7 @@ static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object att
     return throw_lisp_error("invalid-attr-not-a-string", attr);
   }
 
-  rete::rete_t* inner_rete = ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_instance)];
+  rete::rete_t* inner_rete = ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance;
   std::string id_s = ecl_string_to_string(id);
   std::string attr_s = ecl_string_to_string(attr);
 
@@ -503,8 +533,33 @@ static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object att
 }
 /* }}}*/
 static cl_object trigger_activated_production_nodes(cl_object rete_instance) {/* {{{*/
-  rete::trigger_activated_production_nodes(ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_instance)]);
+  rete::trigger_activated_production_nodes(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance);
   return ECL_T;
+}
+/* }}}*/
+cl_object lookup_var(cl_object ras_key, cl_object var_symbol, cl_object type_symbol) {/* {{{*/
+  rete::maybe_value_t mbvalue = rete::lookup_var(
+      *ALL_RULE_ACTION_STATES[ecl_symbol_to_string(ras_key)],
+      create_rete_var(var_symbol).name
+  );
+
+  if (mbvalue.has_value) {
+    std::string type_s = ecl_symbol_to_string(type_symbol);
+    if (type_s == "STRING") {
+      return make_constant_base_string( mbvalue.value.as_string );
+      //return c_string_to_object( ("\"" + std::string(mbvalue.value.as_string) + "\"").c_str() );
+    } else if (type_s == "INTEGER") {
+      return ecl_make_integer( mbvalue.value.as_int );
+    } else if (type_s == "FLOAT") {
+      return ecl_make_single_float( mbvalue.value.as_float );
+    } else if (type_s == "BOOL") {
+      return ecl_make_bool( mbvalue.value.as_bool );
+    } else {
+      return throw_lisp_error("unknown-value-type", type_symbol);
+    }
+  } else {
+    return ECL_NIL;
+  }
 }
 /* }}}*/
 // TODO: document this example of traversing a list
@@ -539,6 +594,7 @@ void init_extlib(void)
   define_lisp_condition("rule-salience-not-an-integer");
   define_lisp_condition("rule-has-no-conditions");
   define_lisp_condition("unreachable-area");
+  define_lisp_condition("unknown-value-type");
 
   DEFUN("rete-init", rete_init, 0);
   DEFUN("make-rule", make_rule, 5);
@@ -547,6 +603,7 @@ void init_extlib(void)
   DEFUN("create-wme", create_wme, 4);
   DEFUN("trigger-activated-production-nodes", trigger_activated_production_nodes, 1);
   DEFUN("traverse-list", traverse_list, 1);
+  DEFUN("lookup-var", lookup_var, 3);
 }
 
 }

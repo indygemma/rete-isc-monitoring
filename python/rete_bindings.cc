@@ -25,7 +25,7 @@ public:
     ~rete_t()
     {
         //printf("destroying opaque...\n");
-        delete inner;
+        delete inner; // TODO: rete_t_destroy?
 
         // remove all handlers
         for (auto* handler : all_handlers) {
@@ -78,6 +78,7 @@ public:
       std::function<void(rete::rule_action_state_t)>* copied_handler = new std::function<void(rete::rule_action_state_t)>(handler);
       rule.extra_context = (void*)copied_handler;
       all_handlers.push_back(copied_handler);
+      // TODO: conds needs to be mainteined as well in order to deallocate properly
       //printf("on creation extra_context: %p\n", rule.extra_context);
       rete::add_rule(inner, rule);
     }
