@@ -97,9 +97,10 @@ cl_object throw_lisp_error(const std::string& error_name, cl_object object, cons
   if (error_msg == "") {
     formatted_error = object;
   } else {
-    formatted_error = cl_format(3, c_string_to_object("~s: ~a"),
-                                  c_string_to_object(error_msg.c_str()),
-                                  object);
+    formatted_error = cl_format(4, ECL_NIL,
+                                   make_constant_base_string("~s: ~a~%"),
+                                   make_constant_base_string(error_msg.c_str()),
+                                   object);
   }
   return cl_error(3, c_string_to_object(error_name.c_str()),
                      c_string_to_object(":text"),
@@ -111,7 +112,21 @@ cl_object throw_unreachable_area_lisp_error(const std::string& filename, unsigne
     c_string_to_object(("file: " + filename + " line: " + std::to_string(linenr)).c_str()));
 }
 /* }}}*/
+void lisp_print(const std::string& msg) {/* {{{*/
+  cl_print(1, make_constant_base_string(msg.c_str()));
+}
+/* }}}*/
 
+rete::var_t create_rete_var(cl_object x) {/* {{{*/
+  std::string var_s = ecl_symbol_to_string(x);
+  var_s.erase(0,1); // remove the '?' part
+  return rete::var(var_s.c_str());
+}
+/* }}}*/
+bool is_var(cl_object x) {/* {{{*/
+  return ECL_SYMBOLP(x) && ecl_symbol_to_string(x).at(0) == '?';
+}
+/* }}}*/
 static cl_object rete_init() {/* {{{*/
   cl_object rete_id = lisp("(gensym \"rete\")");
   ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_id)] = rete::rete_t_init();
@@ -125,6 +140,117 @@ static cl_object rete_destroy(cl_object rete_instance) {/* {{{*/
   return ECL_NIL;
 }
 /* }}}*/
+rete::join_test::condition_t create_join_test(cl_object join_test) {/* {{{*/
+  // condition_t var_join(var_t var1, comparator_t comparator, var_t var2);
+  // condition_t const_join(var_t var, comparator_t comparator, value_t val);
+
+  //lisp_print("IN create_join_test. Dealing with join test:");
+  //cl_print(1, join_test);
+  // the length of this list should be exactly 3
+  unsigned int size = count_list(join_test);
+  //cl_print(1, c_string_to_object("Expected join test of length 3"));
+  //cl_print(1, ecl_make_integer(size));
+  if (size != 3) {
+    throw LispException("invalid-condition-join-test", join_test, "The join test needs to be a list of size 3");
+  }
+
+  cl_object operator_part = ECL_CONS_CAR(join_test);
+  cl_object next = ECL_CONS_CDR(join_test);
+  cl_object left_part = ECL_CONS_CAR(next);
+  next = ECL_CONS_CDR(next);
+  cl_object right_part = ECL_CONS_CAR(next);
+
+  // the first element is the operator. We support "=" and "!=" right now
+  if (!ECL_SYMBOLP(operator_part)) {
+    throw LispException("invalid-condition-join-test", operator_part, "The join test operator should be of type SYMBOL");
+  }
+
+  std::string op = ecl_symbol_to_string(operator_part);
+  rete::join_test::comparator_t comparator;
+  if (op == "=") {
+    comparator = rete::join_test::equal();
+  } else if (op == "!=") {
+    comparator = rete::join_test::not_equal();
+  } else {
+    throw LispException("invalid-condition-join-test", operator_part, "Unsupported join test operator");
+  }
+
+  // the second element is the left variable
+  if (!is_var(left_part)) {
+    throw LispException("invalid-condition-join-test", left_part, "The first part of the join test should be a variable (type: SYMBOL)");
+  }
+
+  rete::var_t left_var = create_rete_var(left_part);
+
+  // The third element is the right variable or value. The third element determines if it is a const join or a var join
+  bool value_is_var = false;
+  rete::var_t right_var;
+  rete::value_t right_value;
+  if (is_var(right_part)) {
+    value_is_var = true;
+    right_var = create_rete_var(right_part);
+  } else {
+    switch (ecl_t_of(right_part)) {
+      case t_list: {
+        throw LispException("unsupported-value-part-of-join-test", right_part,
+                            "unsupported value: LIST");
+        break;
+      }
+      case t_hashtable: {
+        throw LispException("unsupported-value-part-of-join-test", right_part,
+                            "unsupported value: HASHTABLE");
+        break;
+      }
+      case t_vector:
+        throw LispException("unsupported-value-part-of-join-test", right_part,
+                            "unsupported value: VECTOR");
+      case t_string: {
+        value_is_var = false;
+        right_value = rete::value_string(ecl_string_to_string(right_part).c_str());
+        break;
+      }
+      case t_symbol: {
+        // This is a non-variable symbol
+        throw LispException("unsupported-value-part-of-condition", right_part,
+                            "expected variable if type is SYMBOL (e.g. ?varname)");
+      }
+      case t_fixnum: {
+        value_is_var = false;
+        right_value = rete::value_int(fixint(right_part));
+        break;
+      }
+      case t_singlefloat: {
+        value_is_var = false;
+        right_value = rete::value_float(ecl_single_float(right_part));
+        break;
+      }
+      case t_doublefloat: {
+        value_is_var = false;
+        right_value = rete::value_float(ecl_double_float(right_part));
+        break;
+      }
+      default: {
+        // is it a boolean value?
+        if (ECL_T == right_part || ECL_NIL == right_part) {
+          bool _val = ECL_T == right_part;
+          value_is_var = false;
+          right_value = rete::value_bool(_val);
+        } else {
+          throw LispException("invalid-value-part-of-join-test", right_part);
+        }
+        break;
+      }
+    }
+  }
+  if (value_is_var) {
+    //lisp_print("CREATING VAR JOIN");
+    return rete::join_test::var_join(left_var, comparator, right_var);
+  } else {
+    //lisp_print("CREATING CONST JOIN");
+    return rete::join_test::const_join(left_var, comparator, right_value);
+  }
+}
+/* }}}*/
 rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition) {/* {{{*/
   cl_object id_part = ECL_CONS_CAR(condition);
   // verify that id part is either STRING or SYMBOL with ? prefix
@@ -135,9 +261,7 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
   } else if (ecl_t_of(id_part) == t_symbol && ecl_symbol_to_string(id_part)[0] == '?')  {
     // we know to use rete.var(id_part)
     cond->identifier_is_constant = false;
-    std::string id_string = ecl_symbol_to_string(id_part);
-    id_string.erase(0, 1);
-    cond->identifier_as_var = rete::var(id_string.c_str());
+    cond->identifier_as_var = create_rete_var(id_part);
   } else {
     throw LispException("unsupported-id-part-of-condition", id_part);
   }
@@ -151,9 +275,7 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
   } else if (ecl_t_of(attr_part) == t_symbol && ecl_symbol_to_string(attr_part)[0] == '?')  {
     // we know to use rete.var(attr_part)
     cond->attribute_is_constant = false;
-    std::string attr_string = ecl_symbol_to_string(attr_part);
-    attr_string.erase(0, 1);
-    cond->attribute_as_var = rete::var(attr_string.c_str());
+    cond->attribute_as_var = create_rete_var(attr_part);
   } else {
     throw LispException("unsupported-attr-part-of-condition", attr_part);
   }
@@ -180,14 +302,12 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
     }
     case t_symbol: {
       // expect ?<string>
-      std::string value_string = ecl_symbol_to_string(value_part);
-      if (value_string[0] != '?') {
+      if (!is_var(value_part)) {
         throw LispException("unsupported-value-part-of-condition", value_part,
                             "expected variable if type is SYMBOL (e.g. ?varname)");
       }
       cond->value_is_constant = false;
-      value_string.erase(0, 1);
-      cond->value_as_var = rete::var(value_string.c_str());
+      cond->value_as_var = create_rete_var(value_part);
       break;
     }
     case t_fixnum: {
@@ -217,10 +337,39 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
       break;
     }
   }
-  // TODO: handle join tests below
-  std::vector<rete::join_test_t> join_tests;
+  // handle join tests below
+  //lisp_print("1) NEXT IN CONDITION:");
+  //cl_print(1, ECL_CONS_CDR(next));
+
   if (ECL_CONS_CDR(next) != ECL_NIL) {
+    if (!ECL_LISTP(ECL_CONS_CAR(ECL_CONS_CDR(next)))) {
+      throw LispException("invalid-join-test-of-condition", ECL_CONS_CAR(ECL_CONS_CDR(next)), "Expected a list of join tests");
+    }
+
+    if (ECL_CONS_CAR(ECL_CONS_CDR(next)) == ECL_NIL) {
+      throw LispException("invalid-join-test-of-condition", ECL_CONS_CAR(ECL_CONS_CDR(next)), "Expected a non-empty list of join tests");
+    }
+
+    std::vector<rete::join_test::condition_t> join_test_conditions;
+    // here we have a list of join tests
+    next = ECL_CONS_CAR(ECL_CONS_CDR(next));
+    while (next != ECL_NIL) {
+      // each element should be a list as well
+      //lisp_print("2) NEXT IN CONDITION:");
+      //cl_print(1, ECL_CONS_CAR(next));
+      cl_object join_test = ECL_CONS_CAR(next);
+      //join_test_conditions.push_back(create_join_test(join_test));
+      (&cond->join_test_conditions)->push_back(create_join_test(join_test));
+      //lisp_print("3) NEXT");
+      //cl_print(1, ECL_CONS_CDR(next));
+      next = ECL_CONS_CDR(next);
+    }
+
+    //cond->join_test_conditions = join_test_conditions;
   }
+
+  std::cout << "condition join tests: " << cond->join_test_conditions.size() << std::endl;
+
   return cond;
 }
 /* }}}*/
@@ -265,11 +414,17 @@ static cl_object make_rule(cl_object rete_instance, cl_object description, cl_ob
 
   rule.conditions_size = cond_count;
   rule.conditions = rete_conds;
+  for (unsigned int i=0; i<cond_count; i++) {
+    condition_t_show(rule.conditions[i]);
+    std::cout << "Before submission. There are " << rule.conditions[i].join_test_conditions.size() << " join tests for index " << i << std::endl;
+  }
   rule.action = dispatch_handler;
   // TODO: pass lisp callback to rule.extra_context
 
   rete::add_rule(ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_instance)],
                  rule);
+
+  // TODO: might have to deallocate rete_conds after submitting to the rete engine
 
   return ECL_T;
 }
@@ -375,7 +530,11 @@ void init_extlib(void)
   define_lisp_condition("unsupported-id-part-of-condition");
   define_lisp_condition("unsupported-attr-part-of-condition");
   define_lisp_condition("unsupported-value-part-of-condition");
+  define_lisp_condition("unsupported-value-part-of-join-test");
+  define_lisp_condition("invalid-join-test-of-condition");
+  define_lisp_condition("invalid-value-part-of-join-test");
   define_lisp_condition("invalid-value-part-of-condition");
+  define_lisp_condition("invalid-condition-join-test");
   define_lisp_condition("rule-description-not-a-string");
   define_lisp_condition("rule-salience-not-an-integer");
   define_lisp_condition("rule-has-no-conditions");

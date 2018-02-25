@@ -62,11 +62,11 @@ def test_var_attr_var_join_tests():# {{{
     assert r.activated_production_nodes() == 0
 
     r.create_wme("Fred", "name", "Fred")
-    r.create_wme("Fred", "position", 3)
+    r.create_wme("Fred", "position", 2)
     r.create_wme("Joe",  "name", "Joe")
     r.create_wme("Joe",  "position", 2)
 
-    assert r.activated_production_nodes() == 1 # no match because joe.position != fred.position
+    assert r.activated_production_nodes() == 0 # no match because joe.position != fred.position
 # }}}
 def test_var_var_value():# {{{
     r = rete.Rete()

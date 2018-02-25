@@ -24,6 +24,11 @@
 
   (make-rule *rete-id* "test" 3 '() (lambda (ras) nil))
   (make-rule *rete-id* "test" 3 '((?fred "name" 4.5)) (lambda (ras) nil))
+  (make-rule *rete-id* "test" 3 '((?x "heartrate" 80)
+                                  (?x "age"       ?t)
+                                  (?z "height"    ?d ((=  ?z ?x)
+                                                      (!= ?d ?t))))
+             (lambda (ras) nil))
 
   (traverse-list '(1 2 3 (4 5 6)));
 

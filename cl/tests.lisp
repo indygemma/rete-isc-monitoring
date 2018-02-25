@@ -41,10 +41,10 @@
                               #'simple-rule-handler
     (progn
       (create-wme rete "Fred" "name"     "Fred")
-      (create-wme rete "Fred" "position" 3)
+      (create-wme rete "Fred" "position" 2)
       (create-wme rete "Joe"  "name"     "Joe")
       (create-wme rete "Joe"  "position" 2)
-      (check (= (activated-production-nodes rete) 1))))); }}}
+      (check (= (activated-production-nodes rete) 0))))); }}}
 (deftest test-rete-var-var-value (); {{{
   (with-single-rete-rule-test rete "simple rule" 0 '((?little_fred ?attr "Fred")) #'simple-rule-handler
     (progn
