@@ -2,7 +2,7 @@ import rete
 
 # TODO: alternative: s-expr with custom VM to execution action part.
 def handler(ras):# {{{
-    print "hello world from Python....HAHAHA"
+    print "this is a sample python rule handler"
 # }}}
 def test_var_var_var():# {{{
     r = rete.Rete()

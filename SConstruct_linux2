@@ -11,6 +11,7 @@ include_dirs = [
 ]
 
 library_dirs = [
+  "bin/linux"
 ]
 
 libraries = [
@@ -25,7 +26,8 @@ link_flags = [
 
 cxx_flags = [
     "-std=c++11",
-    "-g"
+    "-g",
+    "-fPIC"
 ]
 
 src= [
@@ -70,3 +72,8 @@ SharedLibrary("python/rete" + so_ext,
               CPPPATH=[sysconfig.get_python_inc(), "src/include"],
               CPPDEFINES={},
               CPPFLAGS=flags)
+
+# build for Common Lisp using ECL
+env["LIBS"] += ["ecl", "rete"]
+env.Program("bin/linux/cl_main", ["cl/cl_main.cc"])
+env.SharedLibrary("cl/bindings.so", ["cl/bindings.cc"])
