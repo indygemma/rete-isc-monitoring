@@ -114,19 +114,18 @@ cl_object throw_unreachable_area_lisp_error(const std::string& filename, unsigne
 
 static cl_object rete_init() {/* {{{*/
   cl_object rete_id = lisp("(gensym \"rete\")");
-  std::cout << "creating rete instance: " << rete_id << std::endl;
   ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_id)] = rete::rete_t_init();
   return rete_id;
 }
 /* }}}*/
 static cl_object rete_destroy(cl_object rete_instance) {/* {{{*/
-  // TODO: remove they key from the table too
-  std::cout << "destroying rete instance: " << rete_instance << std::endl;
-  rete::rete_t_destroy(ALL_RETE_INSTANCES[ecl_symbol_to_string(rete_instance)]);
+  const std::string& key = ecl_symbol_to_string(rete_instance);
+  rete::rete_t_destroy(ALL_RETE_INSTANCES[key]);
+  ALL_RETE_INSTANCES.erase(key);
   return ECL_NIL;
 }
 /* }}}*/
-rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition) {
+rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition) {/* {{{*/
   cl_object id_part = ECL_CONS_CAR(condition);
   // verify that id part is either STRING or SYMBOL with ? prefix
   if (ecl_t_of(id_part) == t_string) {
@@ -160,7 +159,6 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
   }
   next = ECL_CONS_CDR(next);
   cl_object value_part = ECL_CONS_CAR(next);
-  // TODO: throw exception when encountering unsupported value types, and send appropriate error to the lisp image
   switch (ecl_t_of(value_part)) {
     case t_list: {
       throw LispException("unsupported-value-part-of-condition", value_part,
@@ -225,14 +223,13 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
   }
   return cond;
 }
-
+/* }}}*/
 void dispatch_handler(rete::rule_action_state_t, void* extra_context) {/* {{{*/
   // TODO: dispatch to the correct callback
 }
 /* }}}*/
 static cl_object make_rule(cl_object rete_instance, cl_object description, cl_object salience, cl_object conds, cl_object callback) {/* {{{*/
   /* (defun make-rule (rete-id desc salience conds handler) ...) */
-  std::cout << "Making rule: " << description << std::endl;
   rete::rule_t rule;
 
   // parse description part
@@ -261,7 +258,6 @@ static cl_object make_rule(cl_object rete_instance, cl_object description, cl_ob
     try {
       create_condition(&rete_conds[count], val);
     } catch (LispException& e) {
-      std::cout << "exception caught: " << e.what() << std::endl;
       return throw_lisp_error(e.what(), e.object(), e.message());
     }
     count++;
@@ -297,7 +293,6 @@ static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object att
   std::string id_s = ecl_string_to_string(id);
   std::string attr_s = ecl_string_to_string(attr);
 
-  std::cout << ecl_t_of(value) << std::endl;
   switch (ecl_t_of(value)) {
     case t_list:
       return throw_lisp_error("unsupported-value-part-of-wme", value, "type LIST");
