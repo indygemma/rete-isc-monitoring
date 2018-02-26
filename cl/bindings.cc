@@ -2,8 +2,12 @@
 #include <ecl/ecl.h>
 #include "../src/include/rete.h"
 #include <iostream>
+#include <iomanip>
 #include <unordered_map>
 #include <exception>
+#include <cstdlib>
+#include <cmath>
+#include <random>
 
 #define DEFUN(name, fun, args) \
   cl_def_c_function(c_string_to_object(name), \
@@ -66,6 +70,9 @@ struct rete_session_t {
 
 static std::unordered_map<std::string, rete_session_t> ALL_RETE_SESSIONS;
 static std::unordered_map<std::string, rete::rule_action_state_t*> ALL_RULE_ACTION_STATES;
+static std::random_device RANDOM_DEVICE;
+static std::mt19937 RANDOM_GENERATOR{RANDOM_DEVICE()};
+static std::unordered_map<std::string, std::normal_distribution<>*> NORMAL_DISTRIBUTIONS;
 
 void define_lisp_condition(const std::string& name) {/* {{{*/
   lisp(("(define-condition " + name + " (base-error) ((text :initarg :text :reader text)))").c_str());
@@ -137,7 +144,7 @@ bool is_var(cl_object x) {/* {{{*/
 }
 /* }}}*/
 static cl_object rete_init() {/* {{{*/
-  cl_object rete_id = lisp("(gensym \"rete\")");
+  cl_object rete_id = lisp("(gensym \"rete-\")");
   ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_id)] = rete_session_t();
   ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_id)].rete_instance = rete::rete_t_init();
   return rete_id;
@@ -562,6 +569,22 @@ cl_object lookup_var(cl_object ras_key, cl_object var_symbol, cl_object type_sym
   }
 }
 /* }}}*/
+cl_object create_normal_distribution(cl_object mean, cl_object stddev) {/* {{{*/
+  cl_object key = lisp("(gensym \"nd-\")");
+  NORMAL_DISTRIBUTIONS[ecl_symbol_to_string(key)] = new std::normal_distribution<>( fixint(mean), fixint(stddev) );
+  return key;
+}
+/* }}}*/
+cl_object draw_from_normal_distribution(cl_object key) {/* {{{*/
+  return ecl_make_double_float( (*NORMAL_DISTRIBUTIONS[ecl_symbol_to_string(key)])(RANDOM_GENERATOR) );
+}
+/* }}}*/
+cl_object destroy_normal_distribution(cl_object key) {/* {{{*/
+  delete NORMAL_DISTRIBUTIONS[ecl_symbol_to_string(key)];
+  NORMAL_DISTRIBUTIONS.erase(ecl_symbol_to_string(key));
+  return ECL_T;
+}
+/* }}}*/
 // TODO: document this example of traversing a list
 static cl_object traverse_list(cl_object list) {/* {{{*/
   cl_object next = list;
@@ -604,6 +627,11 @@ void init_extlib(void)
   DEFUN("trigger-activated-production-nodes", trigger_activated_production_nodes, 1);
   DEFUN("traverse-list", traverse_list, 1);
   DEFUN("lookup-var", lookup_var, 3);
+  DEFUN("create-normal-distribution", create_normal_distribution, 2);
+  DEFUN("draw-from-normal-distribution", draw_from_normal_distribution, 1);
+  DEFUN("destroy-normal-distribution", destroy_normal_distribution, 1);
+
+  //RANDOM_GENERATOR = std::mt19937{RANDOM_DEVICE};
 }
 
 }
