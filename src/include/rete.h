@@ -667,7 +667,8 @@ namespace rete {
         rete_t* rete_t_init();
         void rete_t_destroy(rete_t*);
         alpha_node_t* add_condition(rete_t* rs, condition_t& condition);
-        void add_rule(rete_t* rs, rule_t rule);
+        production_node_t* add_rule(rete_t* rs, rule_t rule);
+        void remove_rule(rete_t* rs, production_node_t* pn);
         void create_wme(rete_t* rs, const char* id, const char* attr, value_t val);
         void remove_wme(rete_t* rs, wme_t*);
         maybe_value_t lookup_var(rule_action_state_t ras, const char*);

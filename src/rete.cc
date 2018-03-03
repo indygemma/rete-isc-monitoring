@@ -655,8 +655,34 @@ namespace rete {
         token_t* new_token = new token_t();
         return new_token;
     }/* }}}*/
+    void wme_t_unlink_token(wme_t* wme, token_t* token) {/* {{{*/
+        wme->tokens.erase(std::remove(wme->tokens.begin(), wme->tokens.end(), token), wme->tokens.end());
+    }/* }}}*/
+    void alpha_node_t_unlink_join_node(alpha_node_t* an, join_node_t* jn) {/* {{{*/
+        //printf("IN: alpha_node_t_unlink_join_node\n");
+        //printf("join node: %p\n", (void*)jn);
+        //printf("size of join_nodes in alpha node: %p, %ld\n", (void*)an, an->join_nodes.size());
+        an->join_nodes.erase(std::remove(an->join_nodes.begin(), an->join_nodes.end(), jn), an->join_nodes.end());
+        //printf("IN: alpha_node_t_unlink_join_node end\n");
+    }/* }}}*/
+    void beta_node_t_unlink_join_node(beta_node_t* bn, join_node_t* jn) {/* {{{*/
+        //printf("IN: beta_node_t_unlink_join_node\n");
+        //printf("join node: %p\n", (void*)jn);
+        //printf("size of join_nodes in beta node: %p, %ld\n", (void*)bn, bn->join_nodes.size());
+        bn->join_nodes.erase(std::remove(bn->join_nodes.begin(), bn->join_nodes.end(), jn), bn->join_nodes.end());
+    }/* }}}*/
+    void join_node_t_unlink_beta_node(join_node_t* jn, beta_node_t* bn) {
+        jn->beta_memories->erase(std::remove(jn->beta_memories->begin(), jn->beta_memories->end(), bn), jn->beta_memories->end());
+    }
     void token_t_destroy(rete_t* rs, token_t* token)/* {{{*/
     {
+        if (token->wme) {
+            wme_t_unlink_token(token->wme, token);
+        }
+        // unlink this token from its parent
+        if (token->parent) {
+          token->children.erase(std::remove(token->children.begin(), token->children.end(), token), token->children.end());
+        }
         delete token;
         rs->token_count--;
     }/* }}}*/
@@ -1189,7 +1215,7 @@ namespace rete {
             change_wme(rs, wme, id, attr, val);
         }
     }/* }}}*/
-    void add_rule(rete_t* rs, rule_t rule)/* {{{*/
+    production_node_t* add_rule(rete_t* rs, rule_t rule)/* {{{*/
     {
         //printf("rete_t* rs = %p\n", rs);
         //printf("[DEBUG] ADDING RULE. Root beta node tokens: %d\n", rs->root_beta_node->tokens.size());
@@ -1237,15 +1263,102 @@ namespace rete {
         }
 
         // create production node if the join node has just been created
+        production_node_t* pn;
         if (created) {
-            production_node_t* pn = production_node_t_init(rule.name, rule.salience, jn, rule.action, rule.extra_context);
+            pn = production_node_t_init(rule.name, rule.salience, jn, rule.action, rule.extra_context);
             join_node_t_add_production_node(jn, pn);
             join_node_t_update_matches(rs, jn);
             rs->production_nodes_count++;
+        } else {
+            // the existing production node should be connected with the last join node
+            pn = jn->production_node;
+            assert( pn != NULL );
         }
 
         sync_activated_production_nodes(rs);
+
+        return pn;
     }/* }}}*/
+    void join_node_t_maybe_delete(rete_t* rs, join_node_t* bn);
+    void beta_node_t_maybe_delete(rete_t* rs, beta_node_t* bn) {/* {{{*/
+      //printf("IN: beta_node_t_maybe_delete: %p. Root beta node: %p\n", (void*)bn, (void*)rs->root_beta_node);
+      if (bn->parent_join_node == NULL) {
+        // we are at the root node. Stop
+        return;
+      }
+
+      if (bn->join_nodes.size() > 0) {
+        // we cannot remove this beta node as long as there are other join nodes dependent on it.
+        return;
+      }
+
+      // if any of the tokens have child tokens, we have to stop deletion of this beta node
+      bool has_token_with_children = false;
+      for (token_t* token : bn->tokens) {
+        if (token->children.size() > 0) {
+          has_token_with_children = true;
+        } else {
+          token_t_destroy(rs, token); // remove those that have no children
+        }
+      }
+
+      // we cannot proceed due to token children
+      if (has_token_with_children)
+        return;
+
+      join_node_t_unlink_beta_node(bn->parent_join_node, bn);
+
+      join_node_t* next = bn->parent_join_node;
+
+      // we are clear to remove this beta node
+      delete bn;
+      rs->beta_memory_count--;
+
+      if (next) {
+        join_node_t_maybe_delete(rs, next);
+      }
+    }/* }}}*/
+    /**
+     * This is a non-forced version of a delete, where we need to check whether we are
+     * allowed to perform a deletion or not. The criterias are mainly by checking for
+     * the existence of child beta/production nodes.
+     */
+    void join_node_t_maybe_delete(rete_t* rs, join_node_t* jn) {/* {{{*/
+      //printf("IN: join_node_t_maybe_delete: %p\n", (void*)jn);
+      if (jn->beta_memories && jn->beta_memories->size() > 0) {
+        // we have children nodes that depend on this node. Break off deletion
+        //printf("This join node has %ld children. Break off deletion.\n", jn->beta_memories->size());
+        return;
+      }
+      // unlink this join node with the associated alpha node
+      //printf("IN: join_node_t_maybe_delete: 1\n");
+      alpha_node_t_unlink_join_node(jn->alpha_memory, jn);
+      // unlink this join node from the parent beta node
+      //printf("IN: join_node_t_maybe_delete: 2\n");
+      beta_node_t_unlink_join_node(jn->parent_beta_memory, jn);
+
+      // follow the parent link
+      //printf("IN: join_node_t_maybe_delete: 3\n");
+
+      beta_node_t* next = jn->parent_beta_memory;
+
+      // delete the join node itself
+      delete jn;
+      rs->join_nodes_count--;
+
+      beta_node_t_maybe_delete(rs, next);
+    }/* }}}*/
+    void production_node_t_remove(rete_t* rs, production_node_t* pn) {/* {{{*/
+      if (pn->parent_join_node) {
+        join_node_t_maybe_delete(rs, pn->parent_join_node);
+      }
+      production_node_t_destroy(rs, pn);
+
+    } /* }}}*/
+    void remove_rule(rete_t* rs, production_node_t* pn) {/* {{{*/
+        //printf("IN: remove_rule\n");
+        return production_node_t_remove(rs, pn);
+    } /* }}}*/
     production_node_t* production_node_t_init(const char* name, int salience, join_node_t* jn, rule_action code, void* extra_context)/* {{{*/
     {
         production_node_t* new_pn = new production_node_t();
@@ -1261,10 +1374,13 @@ namespace rete {
     }/* }}}*/
     void production_node_t_destroy(rete_t* rs, production_node_t* pn)/* {{{*/
     {
-        for (token_t* token : pn->tokens)
+        for (token_t* token : pn->tokens) {
+            assert( token->children.size() == 0 ); // tokens in production nodes should be free from child tokens
             token_t_destroy(rs, token);
+        }
 
         delete pn;
+        rs->production_nodes_count--;
     }/* }}}*/
     namespace join_test {/* {{{*/
         bool equal_f(value_t& x, value_t& y)/* {{{*/
@@ -1745,6 +1861,8 @@ namespace rete {
     }/* }}}*/
     void join_node_t_destroy(rete_t* rs, join_node_t* jn)/* {{{*/
     {
+        // This is a forced deletion of the join node and all children nodes.
+
         // clean beta memories
         for (beta_node_t* bn : *jn->beta_memories)
             beta_node_t_destroy(rs, bn);

@@ -269,4 +269,4 @@
                 (range n))))))
 
 ;(create-log-data *readout-meter* 100 #p"/tmp/sample-logdata.txt")
-;(create-log-data *readout-meter* 10 t)
+;(create-log-data *readout-meter* 10 t) ; t means write to stdout

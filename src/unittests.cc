@@ -448,11 +448,11 @@ TEST_CASE( "top or bottom conditions" ) {/* {{{*/
     //rete::create_wme(rs, "vars", "accumulator", rete::value_int(1));
 
     // no matches because bob.position == fred.position
-    printf("activated production nodes: %d\n", rete::activated_production_nodes(rs));
-    printf("alpha memory count: %d\n", rs->alpha_memory_count);
-    printf("beta memory count: %d\n", rs->beta_memory_count);
-    printf("join nodes count: %d\n", rs->join_nodes_count);
-    printf("production nodes count: %d\n", rs->production_nodes_count);
+    //printf("activated production nodes: %d\n", rete::activated_production_nodes(rs));
+    //printf("alpha memory count: %d\n", rs->alpha_memory_count);
+    //printf("beta memory count: %d\n", rs->beta_memory_count);
+    //printf("join nodes count: %d\n", rs->join_nodes_count);
+    //printf("production nodes count: %d\n", rs->production_nodes_count);
 
     //rete::trigger_activated_production_nodes(rs);
 
@@ -461,7 +461,89 @@ TEST_CASE( "top or bottom conditions" ) {/* {{{*/
     rete::rete_t_destroy(rs);
 
 }/* }}}*/
-// for later:
-// TODO: testWMERemovalWorks
-// TODO: example: have conditions [c1, c2, c3], remove c2. What happens to the connections from c3 -> c2 -> c1, which now should be c3 -> c1
-// TODO: testProductionNodeRemoval
+TEST_CASE( "Test rule removals" ) {/* {{{*/
+
+    // test two cases:
+    // (1) add and remove the same rule, should completely remove it
+    // (2) add two rules where some amount of conditions are shared, should remove the longer rule.
+
+    rete::rule_t r1;
+    r1.name = "r1";
+    r1.salience = 0;
+
+    rete::condition_t conditions[2] = {
+        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator")),
+        rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter"))
+    };
+
+    r1.conditions_size = 2;
+    r1.conditions = conditions;
+    r1.action = r1_handler;
+
+    rete::rule_t r2;
+    r2.name = "r2";
+    r2.salience = 0;
+
+    rete::condition_t r2_conditions[2] = {
+        rete::condition_t_iav(rete::id("vars"),      rete::attr("accumulator"), rete::var("accumulator")),
+        rete::condition_t_vax(rete::var("event_id"), rete::attr("type"), rete::value_string("readout-meter-else"))
+    };
+
+    r2.conditions_size = 2;
+    r2.conditions = r2_conditions;
+    r2.action = r1_handler;
+
+    // (1)
+    rete::rete_t* rs = rete::rete_t_init();
+    rete::production_node_t* p1 = rete::add_rule(rs, r1);
+
+    REQUIRE( (rs->alpha_memory_count == 2) );
+    REQUIRE( (rs->beta_memory_count == 2) );
+    REQUIRE( (rs->join_nodes_count == 2) );
+    REQUIRE( (rs->production_nodes_count == 1) );
+    REQUIRE( (rs->token_count == 0) );
+    REQUIRE( (rs->wme_count == 0) );
+
+    rete::remove_rule(rs, p1);
+
+    REQUIRE( (rs->alpha_memory_count == 2) );
+    REQUIRE( (rs->beta_memory_count == 1) );
+    REQUIRE( (rs->join_nodes_count == 0) );
+    REQUIRE( (rs->production_nodes_count == 0) );
+    REQUIRE( (rs->token_count == 0) );
+    REQUIRE( (rs->wme_count == 0) );
+
+    // (2)
+    rete::add_rule(rs, r1);
+
+    REQUIRE( (rs->alpha_memory_count == 2) );
+    REQUIRE( (rs->beta_memory_count == 2) );
+    REQUIRE( (rs->join_nodes_count == 2) );
+    REQUIRE( (rs->production_nodes_count == 1) );
+    REQUIRE( (rs->token_count == 0) );
+    REQUIRE( (rs->wme_count == 0) );
+
+    rete::production_node_t* p2 = rete::add_rule(rs, r2);
+
+    // first condition is shared, so only 1 additional alpha memory is added
+    REQUIRE( (rs->alpha_memory_count == 3) );
+    REQUIRE( (rs->beta_memory_count == 2) ); // same amount of beta memories
+    REQUIRE( (rs->join_nodes_count == 3) );
+    REQUIRE( (rs->production_nodes_count == 2) );
+    REQUIRE( (rs->token_count == 0) );
+    REQUIRE( (rs->wme_count == 0) );
+
+    rete::remove_rule(rs, p2);
+
+    REQUIRE( (rs->alpha_memory_count == 3) );
+    REQUIRE( (rs->beta_memory_count == 2) );
+    REQUIRE( (rs->join_nodes_count == 2) );
+    REQUIRE( (rs->production_nodes_count == 1) );
+    REQUIRE( (rs->token_count == 0) );
+    REQUIRE( (rs->wme_count == 0) );
+
+    // TODO: ensure the tokens are intact. The above is testing the structral correctness. We should test the behavioral as well in the form of tokens evaluated
+
+    rete::rete_t_destroy(rs);
+
+}/* }}}*/

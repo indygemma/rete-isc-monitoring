@@ -60,18 +60,18 @@ for i in range(len(vars)):
 (cc, cxx, opt, basecflags, ccshared, ldshared, so_ext) = vars
 flags = basecflags + " " + opt + " " + "-std=c++11" + " " + "-g" + " " + "-export-dynamic"
 ldshared = ldshared.replace("gcc", "g++")
-SharedLibrary("python/rete" + so_ext,
-              ["python/rete_bindings.cc", "src/rete.cc"],
-              LIBS=["python2.7", "dl", "util", "m", "rete"],
-              LIBPATH=["/usr/lib", "bin/linux"],
-              CXX=cxx,
-              SHLINK=ldshared,
-              SHLINKFLAGS=[],
-              SHLIBPREFIX="",
-              SHLIBSUFFIX=so_ext,
-              CPPPATH=[sysconfig.get_python_inc(), "src/include"],
-              CPPDEFINES={},
-              CPPFLAGS=flags)
+#SharedLibrary("python/rete" + so_ext,
+#              ["python/rete_bindings.cc", "src/rete.cc"],
+#              LIBS=["python2.7", "dl", "util", "m", "rete"],
+#              LIBPATH=["/usr/lib", "bin/linux"],
+#              CXX=cxx,
+#              SHLINK=ldshared,
+#              SHLINKFLAGS=[],
+#              SHLIBPREFIX="",
+#              SHLIBSUFFIX=so_ext,
+#              CPPPATH=[sysconfig.get_python_inc(), "src/include"],
+#              CPPDEFINES={},
+#              CPPFLAGS=flags)
 
 # build for Common Lisp using ECL
 env["LIBS"] += ["ecl", "rete"]
