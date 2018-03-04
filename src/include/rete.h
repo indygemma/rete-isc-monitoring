@@ -169,7 +169,7 @@ namespace rete {
         comparator_t not_equal();
         comparator_t greater_than();
 
-        const char* show_condition_field(condition_field&);
+        const char* show_condition_field(const condition_field&);
 
         struct condition_t {/* {{{*/
             type t;
@@ -351,7 +351,7 @@ namespace rete {
      */
     struct wme_key_t/* {{{*/
     {
-        wme_key_t(const char* id, const char* attr)
+        wme_key_t(const std::string& id, const std::string& attr)
         {
             identifier = id;
             attribute = attr;
@@ -359,17 +359,19 @@ namespace rete {
 
         bool operator==(const wme_key_t &other) const
         {
-            if (strcmp(identifier, other.identifier) != 0)
+            //if (strcmp(identifier, other.identifier) != 0)
+            if (identifier != other.identifier)
                 return false;
 
-            if (strcmp(attribute, other.attribute) != 0)
+            //if (strcmp(attribute, other.attribute) != 0)
+            if (attribute != other.attribute)
                 return false;
 
             return true;
         }
 
-        const char* identifier;
-        const char* attribute;
+        std::string identifier;
+        std::string attribute;
     };/* }}}*/
     struct wme_key_hasher/* {{{*/
     {
@@ -485,8 +487,8 @@ namespace rete {
     struct token_t;
 
     struct wme_t {/* {{{*/
-        char* identifier;
-        char* attribute;
+        std::string identifier;
+        std::string attribute;
         value_t value;
         std::vector<varmap_t> variables;
         std::vector<alpha_node_t*> alpha_nodes;
@@ -648,7 +650,7 @@ namespace rete {
 
     };/* }}}*/
     struct rule_t {/* {{{*/
-        const char* name;
+        std::string name;
         unsigned int salience;
         unsigned int conditions_size;
         condition_t* conditions;
@@ -669,11 +671,13 @@ namespace rete {
         alpha_node_t* add_condition(rete_t* rs, condition_t& condition);
         production_node_t* add_rule(rete_t* rs, rule_t rule);
         void remove_rule(rete_t* rs, production_node_t* pn);
-        void create_wme(rete_t* rs, const char* id, const char* attr, value_t val);
+        void create_wme(rete_t* rs, const char* id, const char* attr, value_t val, bool no_join_activate=false);
         void remove_wme(rete_t* rs, wme_t*);
         maybe_value_t lookup_var(rule_action_state_t ras, const char*);
         int activated_production_nodes(rete_t* rs);
         void trigger_activated_production_nodes(rete_t* rs);
+        const char* to_json(rete_t* rs);
+        void to_json_file(rete_t* rs, const char* filename);
 
         var_t   var(const char* name);
         id_t    id(const char* name);
@@ -705,7 +709,7 @@ namespace rete {
         // 8) xyz
         condition_t condition_t_iax(id_t id, attr_t attr, value_t value);
 
-        void condition_t_show(condition_t& condition);
+        std::string condition_t_show(const condition_t& condition);
     }
 
     std::vector<join_test_t> condition_t_get_join_tests(condition_t&, std::deque<condition_t>);
@@ -716,7 +720,7 @@ namespace rete {
     void rete_t_remove_activated_production_nodes_with_token(rete_t*, token_t*);
     void rete_t_add_wme(rete_t* rs, wme_t* wme);
     void rete_t_remove_wme(rete_t* rs, wme_t* wme);
-    wme_t* rete_t_find_wme(rete_t* rs, const char* id, const char* attr);
+    wme_t* rete_t_find_wme(rete_t* rs, const std::string& id, const std::string& attr);
     void sync_activated_production_nodes(rete_t* rs);
     void rete_t_reset_stats(rete_t* rs);
     /* }}}*/
@@ -724,8 +728,8 @@ namespace rete {
     join_node_t* join_node_t_init(beta_node_t*, alpha_node_t*, std::vector<join_test_t>);
     void join_node_t_add_beta_memory(join_node_t*, beta_node_t*);
     void join_node_t_add_production_node(join_node_t*, production_node_t*);
-    void join_node_t_left_activate(rete_t*, join_node_t*, token_t*, wme::operation::type);
-    void join_node_t_right_activate(rete_t*, join_node_t*, wme_t*, wme::operation::type);
+    void join_node_t_left_activate(rete_t*, join_node_t*, token_t*, wme::operation::type, bool no_join_activate=false);
+    void join_node_t_right_activate(rete_t*, join_node_t*, wme_t*, wme::operation::type, bool no_join_activate=false);
     void join_node_t_destroy(rete_t*, join_node_t*);/* }}}*/
     // ALPHA NODE functions/* {{{*/
     alpha_node_t* alpha_node_t_init();
@@ -733,7 +737,7 @@ namespace rete {
     void alpha_node_t_add_const_tests(alpha_node_t*, std::vector<join_test_t>);
     void alpha_node_t_add_wme(alpha_node_t*, wme_t*);
     void alpha_node_t_remove_wme(alpha_node_t*, wme_t*);
-    void alpha_node_t_activate(rete_t*, alpha_node_t*, wme_t*, wme::operation::type);
+    void alpha_node_t_activate(rete_t*, alpha_node_t*, wme_t*, wme::operation::type, bool no_join_activate=false);
     void alpha_node_t_associate_condition(alpha_node_t*, condition_t&);
     void alpha_node_t_activate_matching_wmes(rete_t*, alpha_node_t*, condition_t&);
     bool alpha_node_t_wme_exists(alpha_node_t*, wme_t*);
@@ -748,7 +752,7 @@ namespace rete {
     // JOIN TESTS functions/* {{{*/
     bool join_tests_equal(std::vector<join_test_t>, std::vector<join_test_t>);/* }}}*/
     // PRODUCTION NODE functions/* {{{*/
-    production_node_t* production_node_t_init(const char*, int, join_node_t*, rule_action, void*);
+    production_node_t* production_node_t_init(const std::string&, int, join_node_t*, rule_action, void*);
     void production_node_t_left_activate(rete_t*, production_node_t*, token_t*, wme_t*,
                                          std::vector<var_t>, wme::operation::type);
     void production_node_t_add_token(production_node_t*, token_t*);
@@ -758,7 +762,7 @@ namespace rete {
     token_t* token_t_init(rete_t*, token_t*, wme_t*, std::vector<var_t>);
     void token_t_destroy(rete_t*, token_t*);/* }}}*/
     // wme_t functions/* {{{*/
-    wme_t* wme_t_init(rete_t*, const char*, const char*, value_t&);
+    wme_t* wme_t_init(rete_t*, const std::string&, const std::string&, value_t&);
     bool wme_t_matches_condition(wme_t*, condition_t&);
     std::vector<condition_t> wme_t_derive_conditions_for_lookup(wme_t*);
     void wme_t_destroy(rete_t*, wme_t*);/* }}}*/

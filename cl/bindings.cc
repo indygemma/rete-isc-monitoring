@@ -66,6 +66,7 @@ struct rete_session_t {
     rete::rete_t* rete_instance;
     std::vector<rete::condition_t*> session_conditions;
     std::vector<cl_object> session_action_handlers; // all action handlers registered for this session, which are lisp lambdas taking a single cl_object argument representing the result
+    std::unordered_map<std::string, rete::production_node_t*> production_nodes;
 };
 
 static std::unordered_map<std::string, rete_session_t> ALL_RETE_SESSIONS;
@@ -460,24 +461,37 @@ static cl_object make_rule(cl_object rete_instance, cl_object description, cl_ob
   // maintain the newly allocated rete_conds for later deallocation
   ALL_RETE_SESSIONS[session_key].session_conditions.push_back(rete_conds);
 
-  rete::add_rule(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance,
-                 rule);
+  rete::production_node_t* pn = rete::add_rule(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance, rule);
 
-  return ECL_T;
+  cl_object pn_id = lisp("(gensym \"production-node-\")");
+  std::string pn_key = ecl_symbol_to_string(pn_id);
+  ALL_RETE_SESSIONS[session_key].production_nodes[pn_key] = pn;
+
+  return pn_id;
 }
 /* }}}*/
+static cl_object delete_rule(cl_object rete_instance, cl_object production_instance) {/* {{{*/
+  std::string session_key = ecl_symbol_to_string(rete_instance);
+  std::string pn_key = ecl_symbol_to_string(production_instance);
+  rete_session_t* session = &(ALL_RETE_SESSIONS[session_key]);
+  rete::production_node_t* pn_node = ALL_RETE_SESSIONS[session_key].production_nodes[pn_key];
+
+  rete::remove_rule(session->rete_instance, pn_node);
+
+  return ECL_T;
+}/* }}}*/
 static cl_object activated_production_nodes(cl_object rete_instance) {/* {{{*/
   return ecl_make_integer(rete::activated_production_nodes(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance));
 }
 /* }}}*/
-static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object attr, cl_object value) {/* {{{*/
+static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object attr, cl_object value, bool no_join_activate) {/* {{{*/
   /**
    * id and attr have to be strings, the value part can be variable: string, boolean, list, integer, float, hashtable
    */
-  if (ecl_t_of(id) != t_string) {
+  if (ecl_t_of(id) != t_string && ecl_t_of(id) != t_base_string) {
     return throw_lisp_error("invalid-id-not-a-string", id);
   }
-  if (ecl_t_of(attr) != t_string) {
+  if (ecl_t_of(attr) != t_string && ecl_t_of(attr) != t_base_string) {
     return throw_lisp_error("invalid-attr-not-a-string", attr);
   }
 
@@ -496,31 +510,43 @@ static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object att
       rete::create_wme( inner_rete,
                         id_s.c_str(),
                         attr_s.c_str(),
-                        rete::value_string(ecl_string_to_string(value).c_str()) );
+                        rete::value_string(ecl_string_to_string(value).c_str()),
+                        no_join_activate);
+      return ECL_T;
+    case t_base_string:
+      rete::create_wme( inner_rete,
+                        id_s.c_str(),
+                        attr_s.c_str(),
+                        rete::value_string(ecl_string_to_string(value).c_str()),
+                        no_join_activate);
       return ECL_T;
     case t_symbol:
       rete::create_wme( inner_rete,
                         id_s.c_str(),
                         attr_s.c_str(),
-                        rete::value_string(ecl_symbol_to_string(value).c_str()) );
+                        rete::value_string(ecl_symbol_to_string(value).c_str()),
+                        no_join_activate);
       return ECL_T;
     case t_fixnum:
       rete::create_wme( inner_rete,
                         id_s.c_str(),
                         attr_s.c_str(),
-                        rete::value_int(fixint(value)) );
+                        rete::value_int(fixint(value)),
+                        no_join_activate);
       return ECL_T;
     case t_singlefloat:
       rete::create_wme( inner_rete,
                         id_s.c_str(),
                         attr_s.c_str(),
-                        rete::value_float(ecl_single_float(value)) );
+                        rete::value_float(ecl_single_float(value)),
+                        no_join_activate);
       return ECL_T;
     case t_doublefloat:
       rete::create_wme( inner_rete,
                         id_s.c_str(),
                         attr_s.c_str(),
-                        rete::value_float(ecl_double_float(value)) );
+                        rete::value_float(ecl_double_float(value)),
+                        no_join_activate);
       return ECL_T;
     default:
       // is it a boolean value?
@@ -529,7 +555,8 @@ static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object att
         rete::create_wme( inner_rete,
                           id_s.c_str(),
                           attr_s.c_str(),
-                          rete::value_bool(_val) );
+                          rete::value_bool(_val),
+                          no_join_activate);
         return ECL_T;
       }
 
@@ -539,6 +566,24 @@ static cl_object create_wme(cl_object rete_instance, cl_object id, cl_object att
   return throw_unreachable_area_lisp_error(__FILE__, __LINE__);
 }
 /* }}}*/
+static cl_object create_wme_default(cl_object rete_instance, cl_object id, cl_object attr, cl_object value) {/* {{{*/
+  return create_wme(rete_instance, id, attr, value, false);
+}/* }}}*/
+static cl_object to_json(cl_object rete_instance) {/* {{{*/
+  const char* result = rete::to_json(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance);
+  printf("JSON RESULT: %s\n", result);
+  return make_constant_base_string(result);
+}/* }}}*/
+static cl_object to_json_file(cl_object rete_instance, cl_object filename) {/* {{{*/
+  rete::to_json_file(
+      ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance,
+      ecl_string_to_string(filename).c_str());
+  //printf("JSON RESULT: %s\n", result);
+  return ECL_T;
+}/* }}}*/
+static cl_object create_wme_no_join_activate(cl_object rete_instance, cl_object id, cl_object attr, cl_object value) {/* {{{*/
+  return create_wme(rete_instance, id, attr, value, true);
+}/* }}}*/
 static cl_object trigger_activated_production_nodes(cl_object rete_instance) {/* {{{*/
   rete::trigger_activated_production_nodes(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance);
   return ECL_T;
@@ -621,15 +666,19 @@ void init_extlib(void)
 
   DEFUN("rete-init", rete_init, 0);
   DEFUN("make-rule", make_rule, 5);
+  DEFUN("delete-rule", delete_rule, 2);
   DEFUN("rete-destroy", rete_destroy, 1);
   DEFUN("activated-production-nodes", activated_production_nodes, 1);
-  DEFUN("create-wme", create_wme, 4);
+  DEFUN("create-wme", create_wme_default, 4);
+  DEFUN("modify-wme", create_wme_no_join_activate, 4);
   DEFUN("trigger-activated-production-nodes", trigger_activated_production_nodes, 1);
   DEFUN("traverse-list", traverse_list, 1);
   DEFUN("lookup-var", lookup_var, 3);
   DEFUN("create-normal-distribution", create_normal_distribution, 2);
   DEFUN("draw-from-normal-distribution", draw_from_normal_distribution, 1);
   DEFUN("destroy-normal-distribution", destroy_normal_distribution, 1);
+  DEFUN("to-json", to_json, 1);
+  DEFUN("to-json-file", to_json_file, 2);
 
   //RANDOM_GENERATOR = std::mt19937{RANDOM_DEVICE};
 }
