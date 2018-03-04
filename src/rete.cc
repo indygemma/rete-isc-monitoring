@@ -12,6 +12,8 @@ using json = nlohmann::json;
 
 namespace rete {
 
+    json join_test_t_to_json(const join_test_t& node, json* index);
+
     const char* bool_show(bool x) {/* {{{*/
         return x ? "true" : "false";
     }/* }}}*/
@@ -1450,8 +1452,90 @@ namespace rete {
             // TODO: compare MAP
             return false;
         }/* }}}*/
+        bool greater_equal_than_f(value_t& x, value_t& y) {/* {{{*/
+            if (x.type != y.type)
+                return false;
+
+            if (x.n != y.n)
+                return false;
+
+            if (x.type == value::INTEGER)
+                if (x.as_int >= y.as_int)
+                    return true;
+
+            if (x.type == value::FLOAT)
+                if (x.as_float >= y.as_float)
+                    return true;
+
+            if (x.type == value::BOOL)
+                // TODO: note to the user (or exception) that greater than on Bools are not supported
+                return false;
+
+            if (x.type == value::STRING)
+                if (strlen(x.as_string) >= strlen(y.as_string))
+                    return true;
+
+            // TODO: compare LIST
+            // TODO: compare MAP
+            return false;
+        }/* }}}*/
+        bool less_than_f(value_t& x, value_t& y) {/* {{{*/
+            if (x.type != y.type)
+                return false;
+
+            if (x.n != y.n)
+                return false;
+
+            if (x.type == value::INTEGER)
+                if (x.as_int < y.as_int)
+                    return true;
+
+            if (x.type == value::FLOAT)
+                if (x.as_float < y.as_float)
+                    return true;
+
+            if (x.type == value::BOOL)
+                // TODO: note to the user (or exception) that greater than on Bools are not supported
+                return false;
+
+            if (x.type == value::STRING)
+                if (strlen(x.as_string) < strlen(y.as_string))
+                    return true;
+
+            // TODO: compare LIST
+            // TODO: compare MAP
+            return false;
+        }/* }}}*/
+        bool less_equal_than_f(value_t& x, value_t& y) {/* {{{*/
+            if (x.type != y.type)
+                return false;
+
+            if (x.n != y.n)
+                return false;
+
+            if (x.type == value::INTEGER)
+                if (x.as_int <= y.as_int)
+                    return true;
+
+            if (x.type == value::FLOAT)
+                if (x.as_float <= y.as_float)
+                    return true;
+
+            if (x.type == value::BOOL)
+                // TODO: note to the user (or exception) that greater than on Bools are not supported
+                return false;
+
+            if (x.type == value::STRING)
+                if (strlen(x.as_string) <= strlen(y.as_string))
+                    return true;
+
+            // TODO: compare LIST
+            // TODO: compare MAP
+            return false;
+        }/* }}}*/
 
         condition_t var_join(var_t var1, comparator_t comparator, var_t var2) {/* {{{*/
+            printf("CREATING var_join: %s\n", comparator.description);
             condition_t c;
             c.var1 = var1;
             c.comparator = comparator;
@@ -1486,6 +1570,24 @@ namespace rete {
           comparator_t c;
           c.description = "greater than test (>)";
           c.function = greater_than_f;
+          return c;
+        }/* }}}*/
+        comparator_t greater_equal_than() {/* {{{*/
+          comparator_t c;
+          c.description = "greater equal than test (>=)";
+          c.function = greater_equal_than_f;
+          return c;
+        }/* }}}*/
+        comparator_t less_than() {/* {{{*/
+          comparator_t c;
+          c.description = "less than test (<)";
+          c.function = less_than_f;
+          return c;
+        }/* }}}*/
+        comparator_t less_equal_than() {/* {{{*/
+          comparator_t c;
+          c.description = "less equal than test (<=)";
+          c.function = less_equal_than_f;
           return c;
         }/* }}}*/
 
@@ -1647,14 +1749,17 @@ namespace rete {
     }/* }}}*/
     std::vector<join_test_t> create_const_join_tests(int idx, maybe_var_t current_vars, std::vector<join_test::condition_t> join_test_conditions)/* {{{*/
     {
+        printf("IN create_const_join_tests\n");
         std::vector<join_test_t> jts;
 
         if (current_vars.has_id) {
             for (join_test::condition_t& jtc : join_test_conditions) {
                 // constant join test
                 maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::IDENTIFIER, current_vars.id_var, jtc);
-                if (mcjt.has_join_test)
+                if (mcjt.has_join_test) {
+                    printf("ADDING ID CONST TEST: %s\n", join_test_t_to_json(mcjt.join_test, NULL).dump(4).c_str());
                     jts.push_back(mcjt.join_test);
+                }
             }
         }
 
@@ -1662,8 +1767,10 @@ namespace rete {
             for (join_test::condition_t& jtc : join_test_conditions) {
                 // constant join test
                 maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::ATTRIBUTE, current_vars.attr_var, jtc);
-                if (mcjt.has_join_test)
+                if (mcjt.has_join_test) {
+                    printf("ADDING ATTR CONST TEST: %s\n", join_test_t_to_json(mcjt.join_test, NULL).dump(4).c_str());
                     jts.push_back(mcjt.join_test);
+                }
             }
         }
 
@@ -1671,8 +1778,10 @@ namespace rete {
             for (join_test::condition_t& jtc : join_test_conditions) {
                 // constant join test
                 maybe_join_test_t mcjt = create_constant_join_test(idx, join_test::VALUE, current_vars.value_var, jtc);
-                if (mcjt.has_join_test)
+                if (mcjt.has_join_test) {
+                    printf("ADDING VALUE CONST TEST: %s\n", join_test_t_to_json(mcjt.join_test, NULL).dump(4).c_str());
                     jts.push_back(mcjt.join_test);
+                }
             }
         }
 
@@ -1758,7 +1867,7 @@ namespace rete {
     }/* }}}*/
     std::vector<join_test_t> condition_t_get_join_tests(condition_t& condition, std::deque<condition_t> earlier_conditions)/* {{{*/
     {
-        //printf("[DEBUG] condition_t_get_join_tests\n");
+        printf("[DEBUG] condition_t_get_join_tests\n");
         maybe_var_t current_vars = condition_t_find_variables(condition);
         std::vector<join_test_t> all_join_tests;
 
@@ -1769,10 +1878,10 @@ namespace rete {
         // potential join tests
         int idx = 0;
         for (condition_t earlier_condition : earlier_conditions) {
-            //printf("idx: %d\n", idx);
-            //printf("condition vs earlier condition:\n");
-            //condition_t_show(condition);
-            //condition_t_show(earlier_condition);
+            printf("idx: %d\n", idx);
+            printf("condition vs earlier condition:\n");
+            condition_t_show(condition);
+            condition_t_show(earlier_condition);
             maybe_var_t earlier_vars = condition_t_find_variables(earlier_condition);
 
             // setup join tests
@@ -1782,7 +1891,15 @@ namespace rete {
             idx++;
         }
 
-        //printf("all_join_tests size=%d\n", all_join_tests.size());
+        printf("all_join_tests size=%ld\n", all_join_tests.size());
+        json jts = {};
+        int count = 0;
+        for (join_test_t& jt : all_join_tests) {
+          printf("count: %d\n", count);
+          jts.push_back(join_test_t_to_json(jt, NULL));
+          count++;
+        }
+        printf("JSON: %s\n", jts.dump(4).c_str());
         return deduplicate_join_tests(all_join_tests);
     }/* }}}*/
     join_node_t* build_or_share_join_node_t(rete_t* rs, beta_node_t* bm, alpha_node_t* am, std::vector<join_test_t> jts, bool& created)/* {{{*/
@@ -2442,6 +2559,7 @@ namespace rete {
       return j;
     }/* }}}*/
     json join_test_t_to_json(const join_test_t& node, json* index) {/* {{{*/
+      //printf("IN join_test_t_to_json\n");
       json j;
       char address[] = "0x00000000";
       sprintf(address, "0x%p", (void*)&node);
@@ -2460,10 +2578,9 @@ namespace rete {
           j["join_type"] = "constant";
           break;
       }
+
       // condition field of arg1
       j["field1"] = show_condition_field(node.field_of_arg1);
-      // condition field of arg2
-      j["field2"] = show_condition_field(node.field_of_arg2);
       // condition_of_arg2
       j["idx_of_arg2_condition"] = node.condition_of_arg2;
       // comparator description
@@ -2471,6 +2588,8 @@ namespace rete {
       // if DEFAULT, VARIABLE: var_t variable
       if (join_test::VARIABLE == node.type || join_test::DEFAULT == node.type) {
         j["variable"] = node.variable.name;
+        // condition field of arg2
+        j["field2"] = show_condition_field(node.field_of_arg2);
       } else {
         // if CONSTANT: value_t constant_value
         j["constant"] = value_t_to_json(node.constant_value, index);

@@ -164,10 +164,16 @@ namespace rete {
         bool equal_f(value_t& x, value_t& y);
         bool not_equal_f(value_t& x, value_t& y);
         bool greater_than_f(value_t& x, value_t& y);
+        bool greater_equal_than_f(value_t& x, value_t& y);
+        bool less_than_f(value_t& x, value_t& y);
+        bool less_equal_than_f(value_t& x, value_t& y);
 
         comparator_t equal();
         comparator_t not_equal();
         comparator_t greater_than();
+        comparator_t greater_equal_than();
+        comparator_t less_than();
+        comparator_t less_equal_than();
 
         const char* show_condition_field(const condition_field&);
 

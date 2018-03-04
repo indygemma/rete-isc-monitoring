@@ -197,6 +197,14 @@ rete::join_test::condition_t create_join_test(cl_object join_test) {/* {{{*/
     comparator = rete::join_test::equal();
   } else if (op == "!=") {
     comparator = rete::join_test::not_equal();
+  } else if (op == ">") {
+    comparator = rete::join_test::greater_than();
+  } else if (op == ">=") {
+    comparator = rete::join_test::greater_equal_than();
+  } else if (op == "<") {
+    comparator = rete::join_test::less_than();
+  } else if (op == "<=") {
+    comparator = rete::join_test::less_equal_than();
   } else {
     throw LispException("invalid-condition-join-test", operator_part, "Unsupported join test operator");
   }
@@ -278,6 +286,7 @@ rete::join_test::condition_t create_join_test(cl_object join_test) {/* {{{*/
 }
 /* }}}*/
 rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition) {/* {{{*/
+  //cl_print(1, condition);
   cl_object id_part = ECL_CONS_CAR(condition);
   // verify that id part is either STRING or SYMBOL with ? prefix
   if (ecl_t_of(id_part) == t_string) {
@@ -419,6 +428,9 @@ static cl_object make_rule(cl_object rete_instance, cl_object description, cl_ob
   if (ecl_t_of(description) != t_string) {
     return throw_lisp_error("rule-description-not-a-string", description);
   }
+
+  //cl_print(1, description);
+  //printf("make_rule name: %s\n", ecl_string_to_string(description).c_str());
   rule.name = ecl_string_to_string(description).c_str();
 
   // parse salience part

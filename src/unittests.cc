@@ -544,6 +544,8 @@ TEST_CASE( "Test rule removals" ) {/* {{{*/
 
     // TODO: ensure the tokens are intact. The above is testing the structral correctness. We should test the behavioral as well in the form of tokens evaluated
 
+    printf("JSON: %s\n", rete::to_json(rs));
+
     rete::rete_t_destroy(rs);
 
 }/* }}}*/
