@@ -15,15 +15,17 @@ def print_token(token, indent=""):
     print ind(indent, str(token))
 
 def print_join_test(jt, indent=""):
-    # print ind(indent, str(jt))
+    print ind(indent, "|")
     print ind(indent, "address:               " + jt["address"])
     print ind(indent, "type:                  " + jt["type"])
     print ind(indent, "join-type:             " + jt["join_type"])
     print ind(indent, "field1:                " + jt["field1"])
     print ind(indent, "comparator:            " + jt["comparator"])
-    print ind(indent, "field2:                " + jt["field2"])
+    if "field2" in jt:
+        print ind(indent, "field2:                " + jt["field2"])
     print ind(indent, "idx_of_arg2_condition: " + str(jt["idx_of_arg2_condition"]))
-    print ind(indent, "variable:              " + jt["variable"])
+    if "variable" in jt:
+        print ind(indent, "variable:              " + jt["variable"])
 
 def print_production_node(pn, indent=""):
     print ind(indent, "===============")
@@ -78,4 +80,4 @@ def main(filename):
     print_beta_node(root)
 
 if __name__ == '__main__':
-    main("c++_0.json")
+    main("c++_1.json")
