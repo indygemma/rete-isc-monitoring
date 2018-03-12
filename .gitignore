@@ -1,3 +1,11 @@
 *.o
 *.gch
 .sconsign.dblite
+*.so
+*.json
+bin/*
+cl/*.fas
+cl/*.os
+python/*.pyc
+python/*.os
+src/*.os
