@@ -1,6 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "include/doctest.h"
 #include "include/rete.h"
+#include <assert.h>
 
 TEST_CASE( "Adding a condition to alpha memory" ) {/* {{{*/
     rete::condition_t c1 = rete::condition_t_vvx(rete::var("test"), rete::var("x"), rete::value_string("lol1"));
@@ -409,7 +410,6 @@ TEST_CASE( "multiple variable binding from condition_t_get_join_tests" ) {/* {{{
     REQUIRE( tests[0].field_of_arg1 == rete::join_test::VALUE );
     REQUIRE( tests[0].field_of_arg2 == rete::join_test::IDENTIFIER );
 }/* }}}*/
-
 TEST_CASE( "top or bottom conditions" ) {/* {{{*/
     rete::rule_t r1;
     r1.name = "r1";
@@ -544,8 +544,198 @@ TEST_CASE( "Test rule removals" ) {/* {{{*/
 
     // TODO: ensure the tokens are intact. The above is testing the structral correctness. We should test the behavioral as well in the form of tokens evaluated
 
-    printf("JSON: %s\n", rete::to_json(rs));
+    printf("JSON: %s\n", rete::to_json(rs).c_str());
 
     rete::rete_t_destroy(rs);
+
+}/* }}}*/
+
+rete::production_node_t* ORIGINAL_ISC = NULL;
+rete::production_node_t* ORIGINAL_START_TIME_ISC = NULL;
+bool DEBUG = true;
+
+void instance_start_time_action(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
+  rete::maybe_value_t id = rete::lookup_var(ras, "id");
+  rete::maybe_value_t timestamp = rete::lookup_var(ras, "timestamp");
+  assert(id.has_value);
+  assert(timestamp.has_value);
+  if (DEBUG) {
+    printf("adding instance-start-time for %s\n", id.value.as_string);
+  }
+  rete::create_wme(ras.rete_state, id.value.as_string, "instance_start_time", rete::value_int(timestamp.value.as_int), true);
+}/* }}}*/
+void alert_readout_threshold_action(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
+  unsigned int threshold = 10000;
+  rete::maybe_value_t id = rete::lookup_var(ras, "id");
+  rete::maybe_value_t acc_values = rete::lookup_var(ras, "acc_values");
+  rete::maybe_value_t value = rete::lookup_var(ras, "readout_value");
+
+  assert( id.has_value );
+  assert( acc_values.has_value );
+  assert( value.has_value );
+
+  unsigned int acc_values2 = acc_values.value.as_int + value.value.as_int;
+  if (DEBUG) {
+    printf("(ORIGINAL)instance id: %s accumulated value: %d, next value: %d\n",
+           id.value.as_string,
+           acc_values.value.as_int,
+           value.value.as_int);
+  }
+
+  if (acc_values2 > threshold) {
+    if (DEBUG) {
+      printf("ALERT(ORIGINAL): READOUT THRESHOLD EXCEEDED: %d\n", acc_values2);
+    }
+  } else {
+    rete::create_wme(
+                     ras.rete_state,
+                     "vars", "accumulated_values", rete::value_int(acc_values2), true);
+  }
+}/* }}}*/
+void alert_readout_threshold_action_adapted_old(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
+  unsigned int threshold = 10000;
+  rete::maybe_value_t id = rete::lookup_var(ras, "id");
+  rete::maybe_value_t acc_values = rete::lookup_var(ras, "acc_values");
+  rete::maybe_value_t value = rete::lookup_var(ras, "readout_value");
+
+  assert( id.has_value );
+  assert( acc_values.has_value );
+  assert( value.has_value );
+
+  unsigned int acc_values2 = acc_values.value.as_int + value.value.as_int;
+  if (DEBUG) {
+    printf("(OLD) instance id: %s accumulated value: %d, next value: %d\n",
+           id.value.as_string,
+           acc_values.value.as_int,
+           value.value.as_int);
+  }
+
+  if (acc_values2 > threshold) {
+    if (DEBUG) {
+      printf("ALERT (OLD): READOUT THRESHOLD EXCEEDED: %d\n", acc_values2);
+    }
+  } else {
+    rete::create_wme(
+                     ras.rete_state,
+                     "old_vars", "accumulated_values", rete::value_int(acc_values2), true);
+  }
+}/* }}}*/
+rete::rete_t* setup_rete_env() {/* {{{*/
+  rete::rule_t r1;
+  r1.name = "Assign process instance start time";
+  r1.salience = 0;
+
+  rete::condition_t conditions1[2] = {
+    rete::condition_t_vax(rete::var("id"), rete::attr("type"), rete::value_string("START-EVENT")),
+    rete::condition_t_vav(rete::var("id"), rete::attr("timestamp"), rete::var("timestamp"))
+  };
+
+  r1.conditions_size = 2;
+  r1.conditions = conditions1;
+  r1.action = instance_start_time_action;
+
+  rete::rule_t r2;
+  r2.name = "original ISC - send alert threshold exceeded";
+  r2.salience = 0;
+
+  rete::condition_t conditions2[5] = {
+    rete::condition_t_vax(rete::var("id"), rete::attr("type"), rete::value_string("READ-OUT-METER")),
+    rete::condition_t_vavjv(rete::var("id"), rete::attr("timestamp"), rete::var("timestamp"), {
+        rete::join_test::const_join( rete::var("timestamp"), rete::join_test::greater_equal_than(), rete::value_int(1514764800) ),
+        //rete::join_test::const_join( rete::var("timestamp"), rete::join_test::less_equal_than(), rete::value_int(1514786400) )
+
+      }),
+    rete::condition_t_vav(rete::var("id"), rete::attr("readout"), rete::var("readout_value")),
+    rete::condition_t_vav(rete::var("id"), rete::attr("instance_start_time"), rete::var("ist")),
+    rete::condition_t_iav(rete::id("vars"), rete::attr("accumulated_values"), rete::var("acc_values"))
+
+  };
+
+  r2.conditions_size = 5;
+  r2.conditions = conditions2;
+  r2.action = alert_readout_threshold_action;
+
+  // START
+  rete::rete_t* rs = rete::rete_t_init();
+  ORIGINAL_START_TIME_ISC = rete::add_rule(rs, r1);
+  rete::to_json_file(rs, "c++_0.json");
+  rete::production_node_t* original_isc = rete::add_rule(rs, r2);
+
+  rete::to_json_file(rs, "c++_1.json");
+
+  ORIGINAL_ISC = original_isc;
+
+  return rs;
+}/* }}}*/
+rete::rete_t* add_adapted_old_isc(rete::rete_t* rs, long tc) {/* {{{*/
+  printf("IN add_adapted_old_isc\n");
+
+  rete::rule_t r1;
+  r1.name = "Assign process instance start time";
+  r1.salience = 0;
+
+  rete::condition_t conditions1[2] = {
+    rete::condition_t_vax(rete::var("id"), rete::attr("type"), rete::value_string("START-EVENT")),
+    rete::condition_t_vav(rete::var("id"), rete::attr("timestamp"), rete::var("timestamp"))
+  };
+
+  r1.conditions_size = 2;
+  r1.conditions = conditions1;
+  r1.action = instance_start_time_action;
+
+  rete::rule_t r2;
+  r2.name = "original ISC adapted - send alert threshold exceeded";
+  r2.salience = 0;
+
+  rete::condition_t conditions2[5] = {
+    rete::condition_t_vax(rete::var("id"), rete::attr("type"), rete::value_string("READ-OUT-METER")),
+    rete::condition_t_vavjv(rete::var("id"), rete::attr("timestamp"), rete::var("timestamp"), {
+        rete::join_test::const_join( rete::var("timestamp"), rete::join_test::greater_equal_than(), rete::value_int(1514764800) ),
+        //rete::join_test::const_join( rete::var("timestamp"), rete::join_test::less_equal_than(), rete::value_int(1514786400) )
+
+      }),
+    rete::condition_t_vav(rete::var("id"), rete::attr("readout"), rete::var("readout_value")),
+    rete::condition_t_vavjv(rete::var("id"), rete::attr("instance_start_time"), rete::var("ist"), {
+        rete::join_test::const_join( rete::var("ist"), rete::join_test::less_than(), rete::value_int(tc))
+      }),
+    rete::condition_t_iav(rete::id("old_vars"), rete::attr("accumulated_values"), rete::var("acc_values")),
+
+
+  };
+
+  r2.conditions_size = 5;
+  r2.conditions = conditions2;
+  r2.action = alert_readout_threshold_action_adapted_old;
+
+  // START
+  rete::add_rule(rs, r1);
+  rete::add_rule(rs, r2);
+  return rs;
+}/* }}}*/
+TEST_CASE( "Test rule minimal example" ) {/* {{{*/
+
+    // Test minimal example where segfaults occur due to:
+    // (1) delete token tree that causes double freeing
+    // (2) delete rule
+  rete::rete_t* rs = setup_rete_env();
+
+  rete::to_json_file(rs, "minimal_1.json");
+  printf("wrote to minimal_1.json\n");
+
+  rs = add_adapted_old_isc(rs, 1514774800);
+  printf("AFTER ADAPT OLD: alpha nodes: %d, beta nodes: %d, join nodes: %d, production nodes: %d, tokens: %d, wmes: %d\n",
+         rs->alpha_memory_count,
+         rs->beta_memory_count,
+         rs->join_nodes_count,
+         rs->production_nodes_count,
+         rs->token_count,
+         rs->wme_count
+         );
+  rete::to_json_file(rs, "minimal_2.json");
+  rete::remove_rule(rs, ORIGINAL_ISC);
+  rete::to_json_file(rs, "minimal_3.json");
+  return;
+
+  rete::rete_t_destroy(rs);
 
 }/* }}}*/

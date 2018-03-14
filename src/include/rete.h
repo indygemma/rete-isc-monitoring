@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unordered_map>
 #include <vector>
+#include <set>
 #include <deque>
 
 namespace rete {
@@ -645,6 +646,7 @@ namespace rete {
         beta_node_t* root_beta_node;
         std::vector<activated_production_node_t> conflict_set;
         activated_production_table_type activated_production_table;
+        std::set<token_t*> tokens_to_be_deleted;
 
         // stats
         int alpha_node_activations = 0;
@@ -682,7 +684,7 @@ namespace rete {
         maybe_value_t lookup_var(rule_action_state_t ras, const char*);
         int activated_production_nodes(rete_t* rs);
         void trigger_activated_production_nodes(rete_t* rs);
-        const char* to_json(rete_t* rs);
+        std::string to_json(rete_t* rs);
         void to_json_file(rete_t* rs, const char* filename);
 
         var_t   var(const char* name);
