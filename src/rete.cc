@@ -920,6 +920,16 @@ namespace rete {
 
         return mvars;
     }/* }}}*/
+    void process_pending_token_deletions(rete_t* rs) {
+      // actually call delete for tokens to be deleted this round
+      for (token_t* token : rs->tokens_to_be_deleted) {
+        delete token;
+        rs->token_count--;
+        token->parent = NULL;
+        token = NULL;
+      }
+      rs->tokens_to_be_deleted.clear();
+    }
     void trigger_activated_production_nodes(rete_t* rs)/* {{{*/
     {
         std::vector<activated_production_node_t> all_activated_pns;
@@ -935,13 +945,7 @@ namespace rete {
         // clear all previously activated production nodes
         rs->activated_production_table.clear();
 
-        // actually call delete for tokens to be deleted this round
-        for (token_t* token : rs->tokens_to_be_deleted) {
-          delete token;
-          rs->token_count--;
-          token = NULL;
-        }
-        rs->tokens_to_be_deleted.clear();
+        process_pending_token_deletions(rs);
 
         //printf("all_activated_pns count: %ld\n", all_activated_pns.size());
         for (activated_production_node_t apn : all_activated_pns) {
@@ -964,7 +968,7 @@ namespace rete {
         bool activated = false;
 
         if (DEBUG) printf("[DEBUG] activate_alpha_nodes_for_wme\n");
-        wme_t_show(wme);
+        if (DEBUG) wme_t_show(wme);
         for (condition_t& condition : wme_t_derive_conditions_for_lookup(wme)) {
           if (DEBUG) printf("[DEBUG] derived condition:\n");
             condition_t_show(condition);
@@ -1505,7 +1509,7 @@ namespace rete {
             token_t_destroy(rs, token);
         }
 
-        pn->tokens = {};
+        pn->tokens.clear();
 
         pn->extra_context = NULL;
 
@@ -2209,6 +2213,7 @@ namespace rete {
     void rete_t_destroy(rete_t* rs)/* {{{*/
     {
         //printf("[DEBUG] rete_t_destroy called\n");
+        process_pending_token_deletions(rs);
 
         // from the root beta node, delete all tokens, then traverse down the network to seuentially delete instances
         beta_node_t_destroy(rs, rs->root_beta_node);
@@ -2642,7 +2647,13 @@ namespace rete {
 
       if (DEBUG) printf("2...\n");
 
-      // TODO: tokens
+      // tokens
+      json tokens = json::array();
+      for (token_t* token : node->tokens) {
+        if (DEBUG) printf("FOUND token %p in production node %p\n", (void*)token, (void*)node);
+        tokens.push_back(token_t_to_json(token, index, false));
+      }
+      j["tokens"] = tokens;
 
       return j;
     }/* }}}*/

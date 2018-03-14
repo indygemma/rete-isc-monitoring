@@ -95,6 +95,13 @@ def print_production_node(pn, indent=""):
     print ind(indent, "type:      " + pn["type"])
     print ind(indent, "rule-name: " + pn["rule-name"])
     print ind(indent, "salience:  " + str(pn["salience"]))
+    if len(pn["tokens"]) > 0:
+        print ind(indent+INDENT, "|")
+        print ind(indent+INDENT, "======")
+        print ind(indent+INDENT, "TOKENS (" + str(len(pn["tokens"])) + ")")
+        print ind(indent+INDENT, "======")
+        for token in pn["tokens"]:
+            print_token(token, indent=indent+INDENT)
 
 def print_join_node(jn, indent=""):
     print ind(indent, "=========")
