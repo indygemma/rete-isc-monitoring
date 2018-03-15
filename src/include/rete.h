@@ -680,7 +680,8 @@ namespace rete {
         production_node_t* add_rule(rete_t* rs, rule_t rule);
         void remove_rule(rete_t* rs, production_node_t* pn);
         void create_wme(rete_t* rs, const char* id, const char* attr, value_t val, bool no_join_activate=false);
-        void remove_wme(rete_t* rs, wme_t*);
+        void remove_wme(rete_t* rs, const wme_key_t&);
+      void copy_wme(rete_t* rs, const char* old_id, const char* old_attr, const char* new_id, const char* new_attr, bool no_join_activate=false);
         maybe_value_t lookup_var(rule_action_state_t ras, const char*);
         int activated_production_nodes(rete_t* rs);
         void trigger_activated_production_nodes(rete_t* rs);

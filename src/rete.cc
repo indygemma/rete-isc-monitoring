@@ -795,6 +795,8 @@ namespace rete {
         activated.token = token;
 
         rs->conflict_set.push_back(activated);
+
+        rs->production_node_activations++;
     }/* }}}*/
     void rete_t_remove_activated_production_nodes_with_token(rete_t* rs, token_t* token)/* {{{*/
     {
@@ -1051,6 +1053,31 @@ namespace rete {
         }
     }/* }}}*/
 
+    void remove_wme(rete_t* rs, const wme_key_t& wme_key) {
+      wme_table_type::const_iterator it = rs->wme_table.find(wme_key);
+      if (it != rs->wme_table.end()) {
+        // OLD
+        //activate_alpha_nodes_for_wme(rs, wme, wme::operation::DELETE);
+        wme_t* wme = (*it).second;
+
+        // NEW
+        if (DEBUG) printf("1.1...\n");
+        for (alpha_node_t* an : wme->alpha_nodes) {
+          if (DEBUG) printf("1.1.5\n");
+          alpha_node_t_remove_wme(an, wme);
+          if (DEBUG) printf("1.1.9 tokens: %ld\n", wme->tokens.size());
+          for (token_t* token : wme->tokens) {
+            if (DEBUG) printf("1.2...\n");
+            delete_token_tree(rs, token);
+          }
+        }
+      }
+
+      if (DEBUG) printf("2...\n");
+
+      rs->wme_table.erase(wme_key);
+    }
+
     void rete_t_remove_wme(rete_t* rs, wme_t* wme)/* {{{*/
     {
       if (DEBUG) printf("IN rete_t_remove_wme\n");
@@ -1058,28 +1085,7 @@ namespace rete {
 
         if (DEBUG) printf("1...\n");
 
-        wme_table_type::const_iterator it = rs->wme_table.find(
-                wme_key_t(wme->identifier, wme->attribute));
-        if (it != rs->wme_table.end()) {
-            // OLD
-            //activate_alpha_nodes_for_wme(rs, wme, wme::operation::DELETE);
-
-            // NEW
-          if (DEBUG) printf("1.1...\n");
-          for (alpha_node_t* an : wme->alpha_nodes) {
-            if (DEBUG) printf("1.1.5\n");
-            alpha_node_t_remove_wme(an, wme);
-            if (DEBUG) printf("1.1.9 tokens: %ld\n", wme->tokens.size());
-            for (token_t* token : wme->tokens) {
-              if (DEBUG) printf("1.2...\n");
-              delete_token_tree(rs, token);
-            }
-          }
-        }
-
-        if (DEBUG) printf("2...\n");
-
-        rs->wme_table.erase(wme_key_t(wme->identifier, wme->attribute));
+        remove_wme(rs, wme_key_t(wme->identifier, wme->attribute));
     }/* }}}*/
     wme_t* rete_t_find_wme(rete_t* rs, const std::string& id, const std::string& attr)/* {{{*/
     {
@@ -1097,8 +1103,6 @@ namespace rete {
                                          bool no_join_activate)
     {
         //printf("[DEBUG] production_node_t_left_activate\n");
-
-        rs->production_node_activations++;
 
         switch(wme_op) {
             case wme::operation::ADD: {
@@ -1331,6 +1335,18 @@ namespace rete {
         change_wme(rs, wme, id, attr, val, no_join_activate);
       }
     }/* }}}*/
+    void copy_wme(rete_t* rs,
+                  const char* old_id, const char* old_attr,
+                  const char* new_id, const char* new_attr,
+                  bool no_join_activate) {
+      wme_t* old_wme = rete_t_find_wme(rs, old_id, old_attr);
+      if (!old_wme) {
+        return;
+      }
+      wme_t* new_wme = wme_t_init(rs, new_id, new_attr, old_wme->value);
+      rete_t_add_wme(rs, new_wme, no_join_activate);
+      return;
+    }
     production_node_t* add_rule(rete_t* rs, rule_t rule)/* {{{*/
     {
         //printf("rete_t* rs = %p\n", rs);
