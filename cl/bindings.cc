@@ -60,13 +60,20 @@ static unsigned int count_list(cl_object list) {/* {{{*/
   return count;
 }/* }}}*/
 
+struct action_handler_t {
+  std::string session_key;
+  std::string rule_name;
+  cl_object callback;
+};
+
 // used to store the lisp handler and the rete session key when a rule is activated
 struct rete_session_t {
     std::string session_key;
     rete::rete_t* rete_instance;
     std::vector<rete::condition_t*> session_conditions;
-    std::vector<cl_object> session_action_handlers; // all action handlers registered for this session, which are lisp lambdas taking a single cl_object argument representing the result
+    std::unordered_map<std::string, cl_object> session_action_handlers; // all action handlers registered for this session, which are lisp lambdas taking a single cl_object argument representing the result
     std::unordered_map<std::string, rete::production_node_t*> production_nodes;
+    std::vector<action_handler_t*> action_handler_indices;
 };
 
 static std::unordered_map<std::string, rete_session_t> ALL_RETE_SESSIONS;
@@ -160,6 +167,10 @@ static cl_object rete_destroy(cl_object rete_instance) {/* {{{*/
   // deallocate session conditions
   for (auto* conds : ALL_RETE_SESSIONS[key].session_conditions) {
     delete [] conds;
+  }
+
+  for (action_handler_t* ah : ALL_RETE_SESSIONS[key].action_handler_indices) {
+    delete ah;
   }
 
   ALL_RETE_SESSIONS.erase(key);
@@ -410,14 +421,27 @@ rete::condition_t* create_condition(rete::condition_t* cond, cl_object condition
 /* }}}*/
 void dispatch_handler(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
   // dispatch to the correct callback
-  cl_object lisp_handler = (cl_object)extra_context;
+  printf("IN dispatch_handler\n");
+  action_handler_t* ah = (action_handler_t*)extra_context;
+  cl_object lisp_handler = ALL_RETE_SESSIONS[ah->session_key].session_action_handlers[ah->rule_name];
+  //cl_object lisp_handler = ah->callback;
+
   cl_object rule_action_state_key = lisp("(gensym \"rule_action_state\")");
   std::string key_as_string = ecl_symbol_to_string(rule_action_state_key);
+  printf("1\n");
   ALL_RULE_ACTION_STATES[key_as_string] = &ras;
   // call the lisp handler with the rule_action_state_key as parameter
+  printf("1.5\n");
+  cl_print(1, rule_action_state_key);
+  printf("lisp_handler: %p\n", extra_context);
+  printf("Printing lisp_handler: (NULL?:%s)\n", lisp_handler == NULL ? "true":"false");
+  cl_print(1, lisp_handler);
+  printf("END lisp_handler\n");
   funcall(2, lisp_handler, rule_action_state_key);
+  printf("2\n");
   // after the lisp handler returns, remove the rule_action_state session
   ALL_RULE_ACTION_STATES.erase(key_as_string);
+  printf("3\n");
 }
 /* }}}*/
 static cl_object make_rule(cl_object rete_instance, cl_object description, cl_object salience, cl_object conds, cl_object callback) {/* {{{*/
@@ -468,7 +492,16 @@ static cl_object make_rule(cl_object rete_instance, cl_object description, cl_ob
 
   // pass lisp callback to rule.extra_context
   std::string session_key = ecl_symbol_to_string(rete_instance);
-  rule.extra_context = callback;
+
+  action_handler_t* ah = new action_handler_t();
+  ah->session_key = session_key;
+  ah->rule_name = rule.name;
+  ah->callback = callback;
+
+  ALL_RETE_SESSIONS[session_key].action_handler_indices.push_back(ah);
+  ALL_RETE_SESSIONS[session_key].session_action_handlers[rule.name] = callback;
+
+  rule.extra_context = ah;
 
   // maintain the newly allocated rete_conds for later deallocation
   ALL_RETE_SESSIONS[session_key].session_conditions.push_back(rete_conds);
@@ -582,9 +615,9 @@ static cl_object create_wme_default(cl_object rete_instance, cl_object id, cl_ob
   return create_wme(rete_instance, id, attr, value, false);
 }/* }}}*/
 static cl_object to_json(cl_object rete_instance) {/* {{{*/
-  const char* result = rete::to_json(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance);
-  printf("JSON RESULT: %s\n", result);
-  return make_constant_base_string(result);
+  std::string result = rete::to_json(ALL_RETE_SESSIONS[ecl_symbol_to_string(rete_instance)].rete_instance);
+  printf("JSON RESULT: %s\n", result.c_str());
+  return make_constant_base_string(result.c_str());
 }/* }}}*/
 static cl_object to_json_file(cl_object rete_instance, cl_object filename) {/* {{{*/
   rete::to_json_file(

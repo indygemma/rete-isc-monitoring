@@ -26,34 +26,8 @@
 ; TODO: define work schedules that should be followed when performing an
 ; activity that is handled by a human who is following a work schedule.
 
-(def-data-model some-process
-  '())
-
-(defparameter *readout-meter*
-  '((start-event          ((:is-start-event (:start-time "2018-01-01T08:00:00.000000" :hour :mean 5 :stddev 3))))
-    (load-client-profile  ((:before  (:duration :minute :mean 8 :stddev 2))
-                           (:execute
-                             (:duration :minute :mean 25 :stddev 5)
-                             (:data
-                               (("client-id" (random-uuid)))))))
-    (establish-connection ((:before  (:duration :minute :mean 5 :stddev 2))
-                           (:execute
-                             (:duration :minute :mean 5 :stddev 2)
-                             (:data
-                               (("ip-address" (random-ip-address))
-                                ("port"       (random-port :min 1000 :max 35000)))))))
-    ;; TODO: requirement that read-out-meter activities happen directly after midnight of the scheduled day
-    (read-out-meter       ((:before (:duration :minute :mean 60 :stddev 20))
-                           (:execute
-                             (:duration :hour :mean 3 :stddev 2)
-                             (:data
-                               (("read-out-value" (random-integer :mean 500 :stddev 100)))))))
-    (analysis-of-sampled-values ((:before (:duration :day :mean 3 :stddev 1))
-                                 (:execute
-                                   (:duration :hour :mean 2 :stddev 1))))
-    (update-profile-data ((:before (:duration :minute :mean 60 :stddev 20))
-                          (:execute (:duration :minute :mean 10 :stddev 2))))
-    (end-event           ((:is-end-event)))))
+;(def-data-model some-process
+  ;'())
 
 (ql:quickload :cl-arrows)
 (use-package :cl-arrows)
@@ -91,6 +65,7 @@
   (let ((ns (make-hash-table)))
     (setf (gethash 'instance-id ns) (gethash 'instance-id state))
     (setf (gethash 'timestamp ns) (gethash 'timestamp state))
+    (setf (gethash 'timestamp-unix ns) (gethash 'timestamp-unix state))
     (setf (gethash 'event ns) (gethash 'event state))
     ns))
 
@@ -108,7 +83,7 @@
         (ap (get-activity-properties entry)))
     ;(format t "processing activity: ~a -> ~a~%" (symbol-name an) ap)
     (setf (gethash 'event state) (symbol-name an))
-    (let ((new-state (process-spec-entry-properties an ap stream state))) 
+    (let ((new-state (process-spec-entry-properties an ap stream state)))
       new-state)))
 
 (defun process-spec-entry-properties (an properties stream state)
@@ -205,6 +180,7 @@
                                                             (let ((x (draw-from-normal-distribution nd)))
                                                             (local-time:timestamp+ (local-time:parse-timestring start-dt) (round x) time-unit)))))
                                           (setf (gethash 'timestamp state) (local-time:format-timestring nil start-time))
+                                          (setf (gethash 'timestamp-unix state) (local-time:timestamp-to-unix start-time))
                                           state))))
           ((equal name :duration)   (progn
                                       ;(format t "handling duration attribute. ~a~%" attr)
@@ -216,6 +192,7 @@
                                                             (let ((x (draw-from-normal-distribution nd)))
                                                             (local-time:timestamp+ (local-time:parse-timestring current-ts) (round x) time-unit)))))
                                           (setf (gethash 'timestamp state) (local-time:format-timestring nil timestamp))
+                                          (setf (gethash 'timestamp-unix state) (local-time:timestamp-to-unix timestamp))
                                           state))
                                       state))
           ((equal name :data)       (progn
