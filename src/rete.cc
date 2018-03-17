@@ -13,6 +13,7 @@ using json = nlohmann::json;
 namespace rete {
 
     bool DEBUG = false;
+    bool USE_TOKEN_WME_INDEX = true;
 
     json join_test_t_to_json(const join_test_t& node, json* index);
     json beta_node_t_to_json(beta_node_t* node, json* index, bool deep=true);
@@ -103,6 +104,9 @@ namespace rete {
         //return (hash_value ^ seed) * 1677619u;
         return (seed ^ hash_value) + 0x9e3779b9 + (seed<<6) + (seed>>2);
     }/* }}}*/
+    std::size_t string_hash(const std::string& str) {
+      return std::hash<std::string>()(str);
+    }
     std::size_t value_t_hash(value_t val)/* {{{*/
     {
         if (val.type == value::INTEGER)
@@ -115,7 +119,7 @@ namespace rete {
             return std::hash<bool>()(val.as_bool);
 
         if (val.type == value::STRING)
-            return std::hash<std::string>()(val.as_string);
+            return string_hash(val.as_string);
 
         if (val.type == value::EVENT) {
             event_t e = val.as_event;
@@ -261,11 +265,77 @@ namespace rete {
         //alpha_node_t_show(an);
         return exists;
     }/* }}}*/
+    void alpha_node_t_add_index(alpha_node_t* an, wme_t* wme) {
+      for (varmap_t varmap : wme->variables) {
+
+        // index by id
+        if (varmap.has_id) {
+          std::size_t key = string_hash( wme->identifier );
+          if (an->wme_index_id.count(key) == 0) {
+            an->wme_index_id[key] = {};
+          }
+          an->wme_index_id[key].push_back(wme);
+        }
+
+        // index by attr
+        if (varmap.has_attr) {
+          std::size_t key = string_hash( wme->attribute );
+          if (an->wme_index_attr.count(key) == 0) {
+            an->wme_index_attr[key] = {};
+          }
+          an->wme_index_attr[key].push_back(wme);
+        }
+
+        // index by value
+        if (varmap.has_value) {
+          std::size_t key = value_t_hash( wme->value );
+          if (an->wme_index_value.count(key) == 0) {
+            an->wme_index_value[key] = {};
+          }
+          an->wme_index_value[key].push_back(wme);
+        }
+
+      }
+      return;
+    }
+    std::vector<wme_t*> alpha_node_t_lookup_index(alpha_node_t* an, join_test::condition_field field, const std::size_t& key) {
+      std::set<wme_t*> result;
+      switch (field) {
+        case join_test::IDENTIFIER:
+          if (an->wme_index_id.count(key) > 0) {
+            for (wme_t* wme : an->wme_index_id[key]) {
+              result.insert(wme);
+            }
+            return std::vector<wme_t*>(result.begin(), result.end());
+          };
+          return {};
+        case join_test::ATTRIBUTE:
+          if (an->wme_index_attr.count(key) > 0) {
+            for (wme_t* wme : an->wme_index_attr[key]) {
+              result.insert(wme);
+            }
+            return std::vector<wme_t*>(result.begin(), result.end());
+          };
+          return {};
+        case join_test::VALUE:
+          if (an->wme_index_value.count(key) > 0) {
+            for (wme_t* wme : an->wme_index_value[key]) {
+              result.insert(wme);
+            }
+            return std::vector<wme_t*>(result.begin(), result.end());
+          }
+          return {};
+        default:
+          return {};
+      }
+    }
     void alpha_node_t_add_wme(alpha_node_t* an, wme_t* wme)/* {{{*/
     {
         //printf("\t\t\t[DEBUG] alpha_node_t_add_wme: (alpha node:%p)\n", an);
         //wme_t_show(wme);
         an->wmes.push_front(wme);
+
+        alpha_node_t_add_index(an, wme);
     }/* }}}*/
     void alpha_node_t_update_wmes(alpha_node_t* am)/* {{{*/
     {
@@ -1155,6 +1225,19 @@ namespace rete {
             }
         }
     }/* }}}*/
+    std::size_t index_key_of_wme(wme_t* wme, join_test::condition_field field) {
+      switch (field) {
+      case join_test::IDENTIFIER:
+        // printf("INDEX: (ID) %s\n", wme->identifier.c_str() );
+        return string_hash( wme->identifier );
+      case join_test::ATTRIBUTE:
+        // printf("INDEX: (ATTRIBUTE) %s\n", wme->attribute.c_str() );
+        return string_hash( wme->attribute );
+      case join_test::VALUE:
+        // printf("INDEX: (VALUE) %ld\n", index_key );
+        return value_t_hash( wme->value );
+      }
+    }
     void join_node_t_left_activate(rete_t* rs, join_node_t* jn, token_t* token,/* {{{*/
                                    wme::operation::type wme_op, 
                                    bool no_join_activate)
@@ -1162,12 +1245,35 @@ namespace rete {
         //printf("[DEBUG] join_node_t_left_activate: %p\n", (void*)jn);
         rs->join_node_activations++;
 
-        std::vector<join_test_t> jts = jn->join_tests;
         // TODO: handle unlinking here (line 1536 in w2 knottying)
-        for (wme_t* wme : jn->alpha_memory->wmes) {
-            //printf("prepare join test for WME (vars size: %ld):\n", wme->variables.size());
-            //wme_t_show(wme);
+
+        // specifically for DEFAULT join test AND for the current token:
+        // lookup wme in jn->alpha_memory that have the same ?id part
+        std::vector<join_test_t> default_join_tests;
+        for (join_test_t& jt : jn->join_tests) {
+          if (jt.type == join_test::DEFAULT)
+            default_join_tests.push_back(jt);
+        }
+
+        if (USE_TOKEN_WME_INDEX && default_join_tests.size() > 0) {
+          for (join_test_t& default_jt : default_join_tests) {
+            std::size_t index_key = index_key_of_wme(token->wme, default_jt.field_of_arg2);
+            for (wme_t* wme : alpha_node_t_lookup_index(jn->alpha_memory, default_jt.field_of_arg1, index_key)) {
+              // THEN: ONLY if DEFAULT passes OR there is NO DEFAULT:
+              // for the remaining join tests execute as normal. Lookup automatically passes EQUALITY test.
+              // TODO: should we add VARIABLE join test support as well?
+              // printf("prepare join test for WME (vars size: %ld):\n", wme->variables.size());
+              // wme_t_show(wme);
+              left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op, no_join_activate);
+            }
+          }
+        } else {
+          // no default join tests, have to iterate over all
+          for (wme_t* wme : jn->alpha_memory->wmes) {
+            // printf("prepare join test for WME (vars size: %ld):\n", wme->variables.size());
+            // wme_t_show(wme);
             left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op, no_join_activate);
+          }
         }
     }/* }}}*/
     void join_node_t_right_activate(rete_t* rs, join_node_t* jn, wme_t* wme,/* {{{*/
@@ -1180,13 +1286,41 @@ namespace rete {
         //printf("parent beta memory of this join node: %p\n", (void*)jn->parent_beta_memory);
         //printf("parent beta memory token count: %ld\n", jn->parent_beta_memory->tokens.size());
 
+        // TODO: specifically for DEFAULT join test AND for the current wme:
+        // lookup token in jn->parent_beta_memory that have the same ?id part
+
+        // TODO: THEN: ONLY if DEFAULT passes OR there is NO DEFAULT:
+        // for the remaining join tests execute as normal
+
         rs->join_node_activations++;
 
-        //int count = 0;
-        for (token_t* token : jn->parent_beta_memory->tokens) {
-            //printf("[%d]\n", count);
+        // specifically for DEFAULT join test AND for the current token:
+        // lookup wme in jn->alpha_memory that have the same ?id part
+        std::vector<join_test_t> default_join_tests;
+        for (join_test_t& jt : jn->join_tests) {
+          if (jt.type == join_test::DEFAULT)
+            default_join_tests.push_back(jt);
+        }
+
+        if (USE_TOKEN_WME_INDEX && default_join_tests.size() > 0) {
+          for (join_test_t& default_jt : default_join_tests) {
+            std::size_t index_key = index_key_of_wme(wme, default_jt.field_of_arg1);
+            for (token_t* token : beta_node_t_lookup_index(jn->parent_beta_memory, default_jt.field_of_arg2, index_key)) {
+              // THEN: ONLY if DEFAULT passes OR there is NO DEFAULT:
+              // for the remaining join tests execute as normal. Lookup automatically passes EQUALITY test.
+              // TODO: should we add VARIABLE join test support as well?
+              // printf("prepare join test for WME (vars size: %ld):\n", wme->variables.size());
+              // wme_t_show(wme);
+              left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op, no_join_activate);
+            }
+          }
+        } else {
+          // no default join tests, have to iterate over all
+          for (token_t* token : jn->parent_beta_memory->tokens) {
+            // printf("prepare join test for WME (vars size: %ld):\n", wme->variables.size());
+            // wme_t_show(wme);
             left_activate_after_successful_join_tests(rs, jn, token, wme, wme_op, no_join_activate);
-            //count++;
+          }
         }
     }/* }}}*/
     void join_node_t_update_matches(rete_t* rs, join_node_t* jn)/* {{{*/
@@ -2153,9 +2287,75 @@ namespace rete {
     {
         bm->join_nodes.push_back(jn);
     }/* }}}*/
+    void beta_node_t_add_index(beta_node_t* bn, token_t* token) {
+      for (varmap_t varmap : token->wme->variables) {
+
+        // index by id
+        if (varmap.has_id) {
+          std::size_t key = string_hash( token->wme->identifier );
+          if (bn->token_index_id.count(key) == 0) {
+            bn->token_index_id[key] = {};
+          }
+          bn->token_index_id[key].push_back(token);
+        }
+
+        // index by attr
+        if (varmap.has_attr) {
+          std::size_t key = string_hash( token->wme->attribute );
+          if (bn->token_index_attr.count(key) == 0) {
+            bn->token_index_attr[key] = {};
+          }
+          bn->token_index_attr[key].push_back(token);
+        }
+
+        // index by value
+        if (varmap.has_value) {
+          std::size_t key = value_t_hash( token->wme->value );
+          if (bn->token_index_value.count(key) == 0) {
+            bn->token_index_value[key] = {};
+          }
+          bn->token_index_value[key].push_back(token);
+        }
+
+      }
+      return;
+    }
+    std::vector<token_t*> beta_node_t_lookup_index(beta_node_t* bn, join_test::condition_field field, const std::size_t& key) {
+      std::set<token_t*> result;
+      switch (field) {
+        case join_test::IDENTIFIER:
+          if (bn->token_index_id.count(key) > 0) {
+            for (token_t* token : bn->token_index_id[key]) {
+              result.insert(token);
+            }
+            return std::vector<token_t*>(result.begin(), result.end());
+          }
+          return {};
+        case join_test::ATTRIBUTE:
+          if (bn->token_index_attr.count(key) > 0) {
+            for (token_t* token : bn->token_index_attr[key]) {
+              result.insert(token);
+            }
+            return std::vector<token_t*>(result.begin(), result.end());
+          }
+          return {};
+        case join_test::VALUE:
+          if (bn->token_index_value.count(key) > 0) {
+            for (token_t* token : bn->token_index_value[key]) {
+              result.insert(token);
+            }
+            return std::vector<token_t*>(result.begin(), result.end());
+          }
+          return {};
+        default:
+          return {};
+      }
+    }
     void beta_node_t_add_token(beta_node_t* bm, token_t* token)/* {{{*/
     {
         bm->tokens.push_back(token);
+
+        beta_node_t_add_index(bm, token);
     }/* }}}*/
     void beta_node_t_remove_token(beta_node_t* bm, token_t* token)/* {{{*/
     {
@@ -2468,6 +2668,7 @@ namespace rete {
       j["type"] = "alpha-node";
 
       //printf("1...\n");
+      j["wme_count"] = node->wmes.size();
 
       // WMEs
       if (deep) {

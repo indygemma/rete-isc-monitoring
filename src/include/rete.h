@@ -516,14 +516,19 @@ namespace rete {
         std::vector<condition_t> conditions;
         std::vector<maybe_var_t> variables;
         std::vector<std::vector<join_test_t>> const_tests;
+
+        // wme indices
+        std::unordered_map<std::size_t, std::vector<wme_t*>> wme_index_id;
+        std::unordered_map<std::size_t, std::vector<wme_t*>> wme_index_attr;
+        std::unordered_map<std::size_t, std::vector<wme_t*>> wme_index_value;
     };/* }}}*/
 
     struct production_node_t;
 
     struct token_t {/* {{{*/
         token_t* parent; // optional
-        wme_t* wme;
-        std::vector<var_t> vars;
+        wme_t* wme; // wme holds the original variables
+        std::vector<var_t> vars; // for later var lookup after production node activation
         beta_node_t* beta_node;
         production_node_t* production_node;
         std::vector<token_t*> children;
@@ -626,6 +631,11 @@ namespace rete {
         join_node_t* parent_join_node; // optional
         std::vector<join_node_t*> join_nodes;
         std::vector<token_t*> tokens;
+
+        // token indices
+        std::unordered_map<std::size_t, std::vector<token_t*>> token_index_id;
+        std::unordered_map<std::size_t, std::vector<token_t*>> token_index_attr;
+        std::unordered_map<std::size_t, std::vector<token_t*>> token_index_value;
     };/* }}}*/
 
     typedef std::unordered_map<rete::condition_t, alpha_node_t*, rete::condition_t_hasher> alpha_network_type;
@@ -745,6 +755,8 @@ namespace rete {
     void alpha_node_t_add_join_node(alpha_node_t*, join_node_t*);
     void alpha_node_t_add_const_tests(alpha_node_t*, std::vector<join_test_t>);
     void alpha_node_t_add_wme(alpha_node_t*, wme_t*);
+    void alpha_node_t_add_index(alpha_node_t*, wme_t*);
+    std::vector<wme_t*> alpha_node_t_lookup_index(alpha_node_t*, join_test::condition_field, const std::size_t&);
     void alpha_node_t_remove_wme(alpha_node_t*, wme_t*);
     void alpha_node_t_activate(rete_t*, alpha_node_t*, wme_t*, wme::operation::type, bool no_join_activate=false);
     void alpha_node_t_associate_condition(alpha_node_t*, condition_t&);
@@ -756,6 +768,8 @@ namespace rete {
     beta_node_t* beta_node_t_init(join_node_t*);
     void beta_node_t_add_join_node(beta_node_t*, join_node_t*);
     void beta_node_t_add_token(beta_node_t*, token_t*);
+    void beta_node_t_add_index(beta_node_t*, token_t*);
+    std::vector<token_t*> beta_node_t_lookup_index(beta_node_t*, join_test::condition_field, const std::size_t&);
     void beta_node_t_remove_token(beta_node_t*, token_t*);
     void beta_node_t_destroy(rete_t*, beta_node_t*);/* }}}*/
     // JOIN TESTS functions/* {{{*/
