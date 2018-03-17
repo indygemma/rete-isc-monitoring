@@ -77,8 +77,9 @@ def print_join_test(jt, indent=""):
         print ind(indent, "variable:              " + jt["variable"])
 
 def print_alpha_node(an, indent=""):
-    print ind(indent, "address: " + an["address"])
-    print ind(indent, "type:    " + an["type"])
+    print ind(indent, "address:   " + an["address"])
+    print ind(indent, "type:      " + an["type"])
+    print ind(indent, "wme count: " + str(an["wme_count"]))
     for cond in an["conditions"]:
         print ind(indent, "|")
         print ind(indent, cond)
