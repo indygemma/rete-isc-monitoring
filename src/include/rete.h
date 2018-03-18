@@ -187,6 +187,8 @@ namespace rete {
         };/* }}}*/
         condition_t var_join(var_t var1, comparator_t comparator, var_t var2);
         condition_t const_join(var_t var, comparator_t comparator, value_t val);
+
+        std::string condition_t_show(const condition_t& jt);
     }/* }}}*/
 
     struct condition_t {/* {{{*/
@@ -795,6 +797,30 @@ namespace rete {
     void condition_t_copy(const condition_t& src, condition_t* dst);
 
     maybe_var_t condition_t_find_variables(condition_t&);/* }}}*/
-}
 
+    void debug_stats(rete_t* rs, const std::string& header, long runtime=-1);
+
+    // ----
+    // EVOLUTION API
+    // ----
+
+    struct rule_instance_t {
+      rete::rule_t rule_definition;
+      rete::production_node_t* production_node;
+    };
+
+    // shared variables can be either copied or initialized with default values
+    enum shared_var_init_type_t {
+      COPY,
+      DEFAULT_VALUE
+    };
+
+    std::vector<rule_instance_t> add_rule_version(rete::rete_t* rs,
+                                                  std::vector<rule_instance_t> existing_versions,
+                                                  rete::rule_t& new_rule,
+                                                  long tc,
+                                                  shared_var_init_type_t old_namespace_init_type,
+                                                  shared_var_init_type_t new_namespace_init_type,
+                                                  bool preserving = true);
+}
 #endif

@@ -31,7 +31,8 @@ cxx_flags = [
 ]
 
 src= [
-  "rete.cc"
+  "rete.cc",
+  "evolution.cc"
 ]
 
 dll_src = src
