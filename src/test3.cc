@@ -23,14 +23,20 @@ const int WINDOW_SIZE = 0;
 // long PERFORM_CHANGE_AT = 1514786880; // This is the first event to debug
 long PERFORM_CHANGE_AT = -1;
 // bool PERFORM_CHANGE = true;
-bool DO_PRESERVED_CHANGE = true;
 
 // STATS
 int STATS_INSTANCES_BEFORE_TC = 0;
 int STATS_INSTANCES_AFTER_TC = 0;
 int STATS_ORIGINAL_INSTANCE_TRIGGERED = 0;
+
+std::chrono::steady_clock::time_point TIMER;
 int STATS_OLD_INSTANCE_TRIGGERED = 0;
 int STATS_NEW_INSTANCE_TRIGGERED = 0;
+
+void reset_stats() {
+  STATS_OLD_INSTANCE_TRIGGERED = 0;
+  STATS_NEW_INSTANCE_TRIGGERED = 0;
+}
 
 void instance_start_time_action(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
   rete::maybe_value_t id = rete::lookup_var(ras, "id");
@@ -45,11 +51,13 @@ void instance_start_time_action(rete::rule_action_state_t ras, void* extra_conte
   json target_id;
   target_id["instance_id"] = instance_id;
   target_id["event"] = "READ-OUT-METER";
-  if (timestamp.value.as_int < PERFORM_CHANGE_AT) {
-    STATS_INSTANCES_BEFORE_TC++;
-  } else {
-    STATS_INSTANCES_AFTER_TC++;
-  }
+  // if (timestamp.value.as_int < PERFORM_CHANGE_AT) {
+  //   STATS_INSTANCES_BEFORE_TC++;
+  //   STATS_OLD_INSTANCE_TRIGGERED++;
+  // } else {
+  //   STATS_INSTANCES_AFTER_TC++;
+  //   STATS_NEW_INSTANCE_TRIGGERED++;
+  // }
   rete::create_wme(ras.rete_state, target_id.dump().c_str(), "instance_start_time", rete::value_int(timestamp.value.as_int), true);
 }/* }}}*/
 void alert_readout_threshold_action(rete::rule_action_state_t ras, void* extra_context) {/* {{{*/
@@ -57,14 +65,20 @@ void alert_readout_threshold_action(rete::rule_action_state_t ras, void* extra_c
   rete::maybe_value_t id = rete::lookup_var(ras, "id");
   rete::maybe_value_t acc_values = rete::lookup_var(ras, "acc_values");
   rete::maybe_value_t value = rete::lookup_var(ras, "readout_value");
+  rete::maybe_value_t ist = rete::lookup_var(ras, "ist");
 
   assert( id.has_value );
   assert( acc_values.has_value );
   assert( value.has_value );
+  assert( ist.has_value );
+
+  if (ist.value.as_int < PERFORM_CHANGE_AT) {
+    STATS_OLD_INSTANCE_TRIGGERED++;
+  } else {
+    STATS_NEW_INSTANCE_TRIGGERED++;
+  }
 
   std::string ns = std::string((const char*)extra_context);
-
-  STATS_ORIGINAL_INSTANCE_TRIGGERED++;
 
   json id_json = json::parse(id.value.as_string);
   std::string instance_id = id_json["instance_id"].get<std::string>();
@@ -263,7 +277,7 @@ rete::rule_instance_t load_rule(rete::rete_t* rs,
     rule.salience = obj["salience"].get<int>();
 
     size_t size = obj["conditions"].size();
-    printf("SIZE of conditions: %ld\n", size);
+    // printf("SIZE of conditions: %ld\n", size);
     rete::condition_t* conds = new rete::condition_t[size];
     uint32_t i = 0;
     for (json cond : obj["conditions"].get<std::vector<json>>()) {
@@ -368,18 +382,28 @@ std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
   return result;
 }
 
-void iterate(int iteration_count, const json& bench_spec,
+json iterate(const std::string& name, const std::string& category,
+             int iteration_count, const json& bench_spec,
              action_lookup_table_t& action_lookup_table,
              const json& event_stream_def,
              const json& change_def,
-             bool perform_change) {
-  // TODO: collect: number of  < tc activations this run
-  // TODO: collect: number of >= tc activations this run
-  // TODO: collect: the above two together
-  // TODO: collect: avg trigger time for  < tc
-  // TODO: collect: avg trigger time for >= tc
-  // TODO: collect: time to do versioning (for fact preserve, non fact preserve)
-  // TODO: collect: actual change impact during versioning + type of change (ADD CONTEXT, DELETE CONTEXT, ADD CONDITION etc.)
+             bool perform_change,
+             bool do_preserved_change) {
+  reset_stats();
+
+  json log;
+  log["name"] = name;
+  log["category"] = category;
+  json old_instance_trigger_times = json::array();
+  json new_instance_trigger_times = json::array();
+
+  // DONE collect: number of  < tc activations this run
+  // DONE collect: number of >= tc activations this run
+  // DONE collect: the above two together
+  // DONE collect: all trigger times for < tc
+  // DONE collect: all trigger times for >= tc
+  // DONE collect: time to do versioning (for fact preserve, non fact preserve)
+  // DONE collect: actual change impact during versioning + type of change (ADD CONTEXT, DELETE CONTEXT, ADD CONDITION etc.)
   // TODO: ensure that all actions are implemented in the json spec
 
   std::string filename = event_stream_def["filename"].get<std::string>();
@@ -449,7 +473,6 @@ void iterate(int iteration_count, const json& bench_spec,
   int count = 0;
   bool CHANGED = false;
   for (const json& event : event_stream) {
-    std::chrono::steady_clock::time_point tick_begin = std::chrono::steady_clock::now();
     std::string instance_id = event["instanceId"].get<std::string>();
     std::string event_name = event["event"].get<std::string>();
     long timestamp = event["timestampUnix"].get<long>();
@@ -459,8 +482,12 @@ void iterate(int iteration_count, const json& bench_spec,
 
     // implement dynamic event mapping according to spec
     // TODO: improve this to be a unordered_map instead of linear vector
+    bool event_matched = false;
+    std::chrono::steady_clock::time_point tick_begin;
     for (single_event_map_t& event_map : event_mapping) {
       if (single_event_map_t_matches(event_map, event)) {
+        tick_begin = std::chrono::steady_clock::now();
+        event_matched = true;
         if (DEBUG) printf("%d: %s\n", count, event.dump(4).c_str());
         generate_facts_from_event(rs, event_map, id, event, variable_lookup_table);
       }
@@ -470,22 +497,35 @@ void iterate(int iteration_count, const json& bench_spec,
       add_rule_version(rs, existing_rules, new_rule_instance.rule_definition, timestamp,
                        old_init_type, // shared variables are copied for old namespace
                        new_init_type, // shared variables are initialized for new namespace
-                       DO_PRESERVED_CHANGE);
+                       log["versioning"],
+                       do_preserved_change
+                       );
 
       // rete::to_json_file(rs, std::string(std::to_string(iteration_count) + "_after_the_change.json").c_str());
       CHANGED = true;
       // rete::to_json_file(rs, "after_the_change.json");
+
+      // TODO: deal with extra_events after a change happens, requiring new context
     }
 
     rete::trigger_activated_production_nodes(rs);
+
+    long tick_time;
+    if (event_matched) {
+      std::chrono::steady_clock::time_point tick_end = std::chrono::steady_clock::now();
+      tick_time = std::chrono::duration_cast<std::chrono::milliseconds>(tick_end-tick_begin).count();
+
+      if (timestamp < PERFORM_CHANGE_AT) {
+        old_instance_trigger_times.push_back(tick_time);
+      } else  {
+        new_instance_trigger_times.push_back(tick_time);
+      }
+    }
 
     if (event_name == "START-EVENT") {
       ended_instances.insert( ended_instances.begin(), instance_id );
       manage_window(rs, ended_instances, WINDOW_SIZE);
     }
-
-    std::chrono::steady_clock::time_point tick_end = std::chrono::steady_clock::now();
-    long tick_time = std::chrono::duration_cast<std::chrono::milliseconds>(tick_end-tick_begin).count();
 
     if (DEBUG && (event_name == "START-EVENT" || event_name == "READ-OUT-METER" && event["state"].get<std::string>() == "running")) {
       printf("Count: %d\n", count);
@@ -518,6 +558,24 @@ void iterate(int iteration_count, const json& bench_spec,
   rete::trigger_activated_production_nodes(rs);
 
   rete::rete_t_destroy(rs);
+
+  long sum_old_eval_times = 0;
+  for (json t : old_instance_trigger_times) {
+    sum_old_eval_times += t.get<long>();
+  }
+
+  long sum_new_eval_times = 0;
+  for (json t : new_instance_trigger_times) {
+    sum_new_eval_times += t.get<long>();
+  }
+
+  log["change_type"] = change_def["type"];
+  log["avg_eval_times_<_tc"] = sum_old_eval_times / old_instance_trigger_times.size();
+  log["avg_eval_times_>=_tc"] = sum_new_eval_times /  new_instance_trigger_times.size();
+  log["num_activations_<_tc"] = STATS_OLD_INSTANCE_TRIGGERED;
+  log["num_activations_>=_tc"] = STATS_NEW_INSTANCE_TRIGGERED;
+
+  return log;
 }
 
 int main(int argc, char** argv) {
@@ -530,16 +588,27 @@ int main(int argc, char** argv) {
   action_lookup_table["readout_alert_threshold"] = alert_readout_threshold_action;
 
   int count = 0;
+  json logs;
   for (json event_stream_def : bench_spec["event_stream"]) {
     for (json change_def : bench_spec["changes"]) {
       // TODO one for old only, no change
       // TODO one for new only, no change
-      // TODO one for old+new, with change
-      // TODO: one for fact preserving change, one for non-preserving change
-      iterate(count, bench_spec, action_lookup_table, event_stream_def, change_def, true);
+      // one for old+new, with fact preserving change
+      logs.push_back( iterate(change_def["name"].get<std::string>(),
+                              "old_new_fact_preserving_change",
+                              count, bench_spec, action_lookup_table,
+                              event_stream_def, change_def, true, true) );
+      // one for old+new, without fact preserving change
+      logs.push_back( iterate(change_def["name"].get<std::string>(),
+                              "old_new_no_fact_preserving_change",
+                              count, bench_spec, action_lookup_table,
+                              event_stream_def, change_def, true, false) );
       count++;
     }
   }
+
+  // TODO show the log with numbers
+  printf("%s\n", logs.dump(4).c_str());
 
   return 0;
 }

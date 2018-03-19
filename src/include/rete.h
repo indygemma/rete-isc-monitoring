@@ -7,6 +7,7 @@
 #include <vector>
 #include <set>
 #include <deque>
+#include "json.hpp"
 
 namespace rete {
 
@@ -798,7 +799,7 @@ namespace rete {
 
     maybe_var_t condition_t_find_variables(condition_t&);/* }}}*/
 
-    void debug_stats(rete_t* rs, const std::string& header, long runtime=-1);
+    void debug_stats(rete_t* rs, const std::string& header, nlohmann::json& log, long runtime=-1);
 
     // ----
     // EVOLUTION API
@@ -821,6 +822,7 @@ namespace rete {
                                                   long tc,
                                                   shared_var_init_type_t old_namespace_init_type,
                                                   shared_var_init_type_t new_namespace_init_type,
+                                                  nlohmann::json& log,
                                                   bool preserving = true);
 }
 #endif

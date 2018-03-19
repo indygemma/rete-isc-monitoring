@@ -5,6 +5,8 @@
 #include <vector>
 #include <chrono>
 
+using json = nlohmann::json;
+
 namespace rete {
 
   struct find_condition_t {
@@ -213,8 +215,12 @@ namespace rete {
                                                 long tc,
                                                 shared_var_init_type_t old_namespace_init_type,
                                                 shared_var_init_type_t new_namespace_init_type,
-                                                bool preserving) {
+                                                nlohmann::json& log,
+                                                bool preserving
+                                                ) {
     rule_instance_t last_rule;
+    log["fact-preserving"] = preserving;
+
     // ----
     // Modifying the router for old versions
     // ----
@@ -286,39 +292,55 @@ namespace rete {
     // ----
 
     rete::production_node_t* pn;
-    debug_stats(rs, "BEFORE:");
+    json log_before;
+    debug_stats(rs, "BEFORE:", log_before);
+    log["0_before"] = log_before;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     if (preserving) {
       // add the newly modified last_rule, disallowing any triggers at this point (as these already happened)
       rete::add_rule(rs, last_rule.rule_definition);
-      debug_stats(rs, "AFTER ADAPT OLD:");
+      json log_after_adapt_old;
+      debug_stats(rs, "AFTER ADAPT OLD:", log_after_adapt_old);
+      log["1_after_adapt_old"] = log_after_adapt_old;
       // rete::to_json_file(rs, "after_add_adapted_old_isc_auto.json");
 
       // remove the original last_rule
       rete::remove_rule(rs, last_rule.production_node);
-      debug_stats(rs, "AFTER REMOVE OLD:");
+      json log_after_remove_old;
+      debug_stats(rs, "AFTER REMOVE OLD:", log_after_remove_old);
+      log["2_after_remove_old"] = log_after_remove_old;
 
       // add the newly modified new_rule
       pn = rete::add_rule(rs, new_rule);
-      debug_stats(rs, "AFTER ADD NEW:");
+      json log_after_add_new;
+      debug_stats(rs, "AFTER ADD NEW:", log_after_add_new);
+      log["3_after_add_new"] = log_after_add_new;
     } else {
       // TODO: we might have to remove the meta-rule that generates (?id, instance_start_time, ?timestamp) to
       // have the full deletion effect.
       // rete::remove_rule(rs, instance_start_time_rule.production_node);
       rete::remove_rule(rs, last_rule.production_node);
-      debug_stats(rs, "AFTER REMOVE OLD:");
+      json log_after_remove_old;
+      debug_stats(rs, "AFTER REMOVE OLD:", log_after_remove_old);
+      log["1_after_remove_old"] = log_after_remove_old;
 
       rete::add_rule(rs, last_rule.rule_definition);
-      debug_stats(rs, "AFTER ADAPT OLD:");
+      json log_after_adapt_old;
+      debug_stats(rs, "AFTER ADAPT OLD:", log_after_adapt_old);
+      log["2_after_adapt_old"] = log_after_adapt_old;
 
       pn = rete::add_rule(rs, new_rule);
-      debug_stats(rs, "AFTER ADD NEW:");
+      json log_after_add_new;
+      debug_stats(rs, "AFTER ADD NEW:", log_after_add_new);
+      log["3_after_add_new"] = log_after_add_new;
     }
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     long runtime = std::chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
-    debug_stats(rs, "AFTER:", runtime);
+    json log_after;
+    debug_stats(rs, "AFTER:", log_after, runtime);
+    log["4_log_after"] = log_after;
 
     // ----
     // copy/initialize both namespaced shared variables

@@ -1550,7 +1550,7 @@ namespace rete {
     production_node_t* add_rule(rete_t* rs, rule_t rule)/* {{{*/
     {
         //printf("rete_t* rs = %p\n", rs);
-        printf("[DEBUG] ADDING RULE. Root beta node tokens: %ld\n", rs->root_beta_node->tokens.size());
+        // printf("[DEBUG] ADDING RULE. Root beta node tokens: %ld\n", rs->root_beta_node->tokens.size());
         //printf("rule conditions size = %d\n", rule.conditions_size);
         //printf("rule salience = %d\n", rule.salience);
         //printf("rule name = %s\n", rule.name);
@@ -1568,7 +1568,7 @@ namespace rete {
         //printf("length: %d\n", rule.conditions_size);
         for (unsigned int i=0;i<rule.conditions_size;i++) {
             //printf("add_rule, condition loop => i: %d\n", i);
-            printf("condition: %s\n", condition_t_show(rule.conditions[i]).c_str());
+            // printf("condition: %s\n", condition_t_show(rule.conditions[i]).c_str());
             alpha_node_t* am = build_or_share_alpha_node_t(rs, rule.conditions[i]);
             std::vector<join_test_t> tests = condition_t_get_join_tests(rule.conditions[i], earlier_conditions);
             //std::vector<join_test_t> const_tests;
@@ -2742,7 +2742,7 @@ namespace rete {
     }/* }}}*/
     void condition_t_copy(const condition_t& src, condition_t* dst)/* {{{*/
     {
-      printf("IN condition_t_copy: %s\n", condition_t_show(src).c_str());
+      // printf("IN condition_t_copy: %s\n", condition_t_show(src).c_str());
         dst->identifier_as_var = src.identifier_as_var;
         dst->identifier_as_val = src.identifier_as_val;
         dst->attribute_as_var = src.attribute_as_var;
@@ -3195,8 +3195,17 @@ namespace rete {
       // printf("writing complete...\n");
     }
 
-    void debug_stats(rete_t* rs, const std::string& header, long runtime) {
+    void debug_stats(rete_t* rs, const std::string& header, nlohmann::json& log, long runtime) {
+      log["header"] = header;
+      log["alpha_memory_count"] = rs->alpha_memory_count;
+      log["beta_memory_count"] = rs->beta_memory_count;
+      log["join_nodes_count"] = rs->join_nodes_count;
+      log["production_nodes_count"] = rs->production_nodes_count;
+      log["token_count"] = rs->token_count;
+      log["wme_count"] = rs->wme_count;
+
       if (runtime >= 0) {
+        log["runtime"] = runtime;
         printf("%s alpha nodes: %d, beta nodes: %d, join nodes: %d, production nodes: %d, tokens: %d, wmes: %d, runtime: %ld\n",
                header.c_str(),
                rs->alpha_memory_count,
