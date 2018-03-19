@@ -816,6 +816,23 @@ namespace rete {
       DEFAULT_VALUE
     };
 
+    struct find_condition_t {
+      rete::condition_t condition;
+      int index = 0; // the index where the condition was found
+      bool condition_exists = false;
+      bool condition_join_test_exists = false;
+    };
+
+
+    find_condition_t find_router_condition(const rete::rule_t& rule, long tc);
+    void add_router_condition_join_test(find_condition_t& fc,
+                                        const std::string& id_name,
+                                        const std::string& condition_name,
+                                        const std::string& var_name,
+                                        rete::join_test::comparator_t comparator,
+                                        long tc,
+                                        rete::rule_t* rule);
+
     std::vector<rule_instance_t> add_rule_version(rete::rete_t* rs,
                                                   std::vector<rule_instance_t> existing_versions,
                                                   rete::rule_t& new_rule,

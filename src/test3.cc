@@ -372,10 +372,11 @@ std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
                                               json bench_spec,
                                               action_lookup_table_t& action_lookup_table,
                                               variable_lookup_table_t& variable_lookup_table,
-                                              const std::string& attribute) {
+                                              const std::string& attribute,
+                                              bool do_add=true) {
   std::vector<rete::rule_instance_t> result;
   for (json ruledef : bench_spec[attribute].get<std::vector<json>>()) {
-    rete::rule_instance_t rule_instance = load_rule(rs, ruledef, action_lookup_table, variable_lookup_table, true);
+    rete::rule_instance_t rule_instance = load_rule(rs, ruledef, action_lookup_table, variable_lookup_table, do_add);
     result.push_back(rule_instance);
   }
 
@@ -388,7 +389,9 @@ json iterate(const std::string& name, const std::string& category,
              const json& event_stream_def,
              const json& change_def,
              bool perform_change,
-             bool do_preserved_change) {
+             bool do_preserved_change,
+             bool old_only,
+             bool new_only) {
   reset_stats();
 
   json log;
@@ -425,8 +428,29 @@ json iterate(const std::string& name, const std::string& category,
   // parse the "meta_ISC" from benchmark JSON and setup all meta rules
   load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "meta_ISC");
 
-  // initialize the original ISC for this event stream
-  std::vector<rete::rule_instance_t> existing_rules = load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "ISC");
+  std::vector<rete::rule_instance_t> existing_rules;
+  if (old_only) {
+    // need to load the original ISCs, but with added < tc router
+    existing_rules = load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "ISC", false);
+    for (rete::rule_instance_t rule_instance : existing_rules) {
+      rete::find_condition_t fc = rete::find_router_condition(rule_instance.rule_definition, PERFORM_CHANGE_AT);
+      add_router_condition_join_test(fc, "id", "instance_start_time", "ist",
+                                     rete::join_test::less_than(), PERFORM_CHANGE_AT,
+                                     &rule_instance.rule_definition);
+      rete::add_rule(rs, rule_instance.rule_definition);
+    }
+  } else if (new_only) {
+    // need to load the change ISC, but with added >= tc router
+    rete::rule_instance_t new_rule_instance = load_rule(rs, change_def["ISC"], action_lookup_table, variable_lookup_table, false);
+    rete::find_condition_t fc = rete::find_router_condition(new_rule_instance.rule_definition, PERFORM_CHANGE_AT);
+    add_router_condition_join_test(fc, "id", "instance_start_time", "ist",
+                                   rete::join_test::greater_equal_than(), PERFORM_CHANGE_AT,
+                                   &new_rule_instance.rule_definition);
+    rete::add_rule(rs, new_rule_instance.rule_definition);
+  } else {
+    // initialize the original ISC for this event stream
+    existing_rules = load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "ISC");
+  }
 
   std::vector<std::string> ended_instances;
 
@@ -591,18 +615,46 @@ int main(int argc, char** argv) {
   json logs;
   for (json event_stream_def : bench_spec["event_stream"]) {
     for (json change_def : bench_spec["changes"]) {
-      // TODO one for old only, no change
-      // TODO one for new only, no change
+      // one for old only, no change
+      logs.push_back( iterate(change_def["name"].get<std::string>(),
+                              "old_only",
+                              count, bench_spec, action_lookup_table,
+                              event_stream_def, change_def,
+                              false, // no change
+                              true,  //
+                              true,  // old only
+                              false  // no new only
+                              )
+                      );
+      // one for new only, no change
+      logs.push_back( iterate(change_def["name"].get<std::string>(),
+                              "new_only",
+                              count, bench_spec, action_lookup_table,
+                              event_stream_def, change_def,
+                              false, // no change
+                              true,  //
+                              false, // no old only
+                              true  //  new only
+                              )
+                      );
       // one for old+new, with fact preserving change
       logs.push_back( iterate(change_def["name"].get<std::string>(),
                               "old_new_fact_preserving_change",
                               count, bench_spec, action_lookup_table,
-                              event_stream_def, change_def, true, true) );
+                              event_stream_def, change_def, true, true,
+                              false, // no old only
+                              false  // no new only
+                              )
+                      );
       // one for old+new, without fact preserving change
       logs.push_back( iterate(change_def["name"].get<std::string>(),
                               "old_new_no_fact_preserving_change",
                               count, bench_spec, action_lookup_table,
-                              event_stream_def, change_def, true, false) );
+                              event_stream_def, change_def, true, false,
+                              false, // no old only
+                              false  // no new only
+                              )
+                      );
       count++;
     }
   }

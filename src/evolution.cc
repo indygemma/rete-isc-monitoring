@@ -9,13 +9,6 @@ using json = nlohmann::json;
 
 namespace rete {
 
-  struct find_condition_t {
-    rete::condition_t condition;
-    int index = 0; // the index where the condition was found
-    bool condition_exists = false;
-    bool condition_join_test_exists = false;
-  };
-
   find_condition_t find_condition(const rete::rule_t& rule,
                                   // id part
                                   bool identifier_is_constant,
