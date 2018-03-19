@@ -20,8 +20,9 @@ const int WINDOW_SIZE = 0;
 // int perform_change_at = 54; // minimal example where segfault occurs
 // int perform_change_at = 100; // 6 = minimal example where token delete segfault occurs
 // long PERFORM_CHANGE_AT = 1514829900; // this is the mean time
-long PERFORM_CHANGE_AT = 1514786880; // This is the first event to debug
-bool PERFORM_CHANGE = true;
+// long PERFORM_CHANGE_AT = 1514786880; // This is the first event to debug
+long PERFORM_CHANGE_AT = -1;
+// bool PERFORM_CHANGE = true;
 bool DO_PRESERVED_CHANGE = true;
 
 // STATS
@@ -158,13 +159,63 @@ json load_benchmark_spec(const std::string& filename) {
   return json::parse(result);
 }
 
+rete::join_test::comparator_t load_comparator(const std::string& str) {
+  if (str == "<") {
+    return rete::join_test::less_than();
+  } else if (str == ">") {
+    return rete::join_test::greater_than();
+  } else if (str == "<=") {
+    return rete::join_test::less_equal_than();
+  } else if (str == ">=") {
+    return rete::join_test::greater_equal_than();
+  } else if (str == "=") {
+    return rete::join_test::equal();
+  } else if (str == "!=") {
+    return rete::join_test::not_equal();
+  } else {
+    // TODO: same-instance-id, which checks inside the ?id part the instance_id key of the json object
+    throw std::runtime_error("Unknown comparator: " + str);
+  }
+}
+
+rete::var_t load_var(json value) {
+  std::string var = value.get<std::string>();
+  if (var[0] != '?') {
+    throw std::runtime_error("variable expected for join test. Got " + var + " instead.");
+  }
+  var.erase(0, 1);
+  return rete::var(var.c_str());
+}
+
+rete::value_t load_value(json value, variable_lookup_table_t& variable_lookup_table) {
+  if (value.is_object() && value["type"].get<std::string>() == "lookup") {
+    // we have a lookup of a variable
+    std::string key = value["name"].get<std::string>();
+    json value = variable_lookup_table[key];
+    return load_value(value, variable_lookup_table);
+  } else if (value.is_string()) {
+    return rete::value_string(value.get<std::string>().c_str());
+  } else if (value.type() == json::value_t::number_integer) {
+    return rete::value_int(value.get<int>());
+  } else if (value.type() == json::value_t::number_float) {
+    return rete::value_float(value.get<float>());
+  } else if (value.is_number()) {
+    return rete::value_int(value.get<int>());
+  } else if (value.is_boolean()) {
+    return rete::value_bool(value.get<bool>());
+  }
+
+  throw std::runtime_error("Unknown value type: " + value.dump(4));
+}
+
 std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
                                               json bench_spec,
                                               action_lookup_table_t& action_lookup_table,
+                                              variable_lookup_table_t& variable_lookup_table,
                                               const std::string& attribute) {
   std::vector<rete::rule_instance_t> result;
   for (json ruledef : bench_spec[attribute].get<std::vector<json>>()) {
-    printf("%s\n", ruledef.dump(4).c_str());
+    // printf("%s\n", ruledef.dump(4).c_str());
     rete::rule_t rule;
     rule.name = ruledef["name"].get<std::string>().c_str();
     rule.salience = ruledef["salience"].get<int>();
@@ -211,19 +262,33 @@ std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
           c.value_is_constant = true;
           c.value_as_val = rete::value_string(value_part.c_str());
         }
-      } else if (value.is_number()) {
+      } else {
         c.value_is_constant = true;
-        c.value_as_val = rete::value_int(cond["value"].get<int>());
+        c.value_as_val = load_value(cond["value"], variable_lookup_table);
       }
-      // TODO add more types here
 
-      // TODO add join tests here
+      // add join tests here
       if (cond.count("join_tests") > 0) {
         for (json jtdef : cond["join_tests"].get<std::vector<json>>()) {
-          printf("JTDEF: %s\n", jtdef.dump(4).c_str());
+          rete::join_test::condition_t join_test;
+          // printf("JTDEF: %s\n", jtdef.dump(4).c_str());
+          std::string type = jtdef["type"].get<std::string>();
+          if ( type == "constant" ) {
+            rete::var_t var = load_var(jtdef["target"]);
+            rete::join_test::comparator_t comparator = load_comparator(jtdef["comparator"]);
+            rete::value_t val = load_value(jtdef["value"], variable_lookup_table);
+            join_test = const_join(var, comparator, val);
+          } else if ( type == "variable" ) {
+            rete::var_t var1 = load_var(jtdef["target"]);
+            rete::join_test::comparator_t comparator = load_comparator(jtdef["comparator"]);
+            rete::var_t var2 = load_var(jtdef["variable"]);
+            join_test = var_join(var1, comparator, var2);
+          } else {
+            throw std::runtime_error("Unknown join test: " + type);
+          }
+          c.join_test_conditions.push_back(join_test);
         }
       }
-      // TODO implement variable substitution e.g. "{{ READOUT_TIME }}"
 
       rete::condition_t_copy(c, &conds[i]);
       i++;
@@ -248,9 +313,9 @@ std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
 }
 
 void iterate(int iteration_count, const json& bench_spec,
-             action_lookup_table_t& action_lookup_table, const json& event_stream_def) {
-  // TODO: integrate the loop for choosing event stream with substitution variables
-  // TODO: - initialize the original ISC for this event stream
+             action_lookup_table_t& action_lookup_table,
+             const json& event_stream_def,
+             bool perform_change) {
   // TODO: - setup event listeners
   // TODO: - for each change ready:
   // TODO:   - feed stream and once tc occurs, apply the change
@@ -259,17 +324,25 @@ void iterate(int iteration_count, const json& bench_spec,
   std::string filename = event_stream_def["filename"].get<std::string>();
   std::vector<json> event_stream = load_event_stream(filename.c_str());
 
+  PERFORM_CHANGE_AT = event_stream_def["change_at"].get<long>();
+
   printf("==== OPENING: %s -> %ld\n", filename.c_str(), event_stream.size());
 
+  // TODO: setup substitution variables
   variable_lookup_table_t variable_lookup_table;
+  json variables = event_stream_def["variables"];
+  for (json::iterator it = variables.begin(); it != variables.end(); it++) {
+    variable_lookup_table[it.key()] = it.value();
+  }
 
   rete::rete_t* rs = rete::rete_t_init();
 
   // parse the "meta_ISC" from benchmark JSON and setup all meta rules
-  load_rules(rs, bench_spec, action_lookup_table, "meta_ISC");
+  load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "meta_ISC");
 
   // load the initial rules
-  std::vector<rete::rule_instance_t> existing_rules = load_rules(rs, bench_spec, action_lookup_table, "ISC");
+  // TODO: - initialize the original ISC for this event stream
+  std::vector<rete::rule_instance_t> existing_rules = load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "ISC");
 
   std::vector<std::string> ended_instances;
 
@@ -338,7 +411,7 @@ void iterate(int iteration_count, const json& bench_spec,
       // rete::to_json_file(rs, "debug.json");
     }
 
-    if (PERFORM_CHANGE && timestamp >= PERFORM_CHANGE_AT && !CHANGED) {
+    if (perform_change && timestamp >= PERFORM_CHANGE_AT && !CHANGED) {
       add_rule_version(rs, existing_rules, r3, timestamp,
                        rete::COPY, // shared variables are copied for old namespace
                        rete::DEFAULT_VALUE, // shared variables are initialized for new namespace
@@ -403,7 +476,11 @@ int main(int argc, char** argv) {
 
   int count = 0;
   for (json event_stream_def : bench_spec["event_stream"].get<json>()) {
-    iterate(count, bench_spec, action_lookup_table, event_stream_def);
+    // TODO one for old only, no change
+    // TODO one for new only, no change
+    // TODO one for old+new, with change
+    // TODO: one for fact preserving change, one for non-preserving change
+    iterate(count, bench_spec, action_lookup_table, event_stream_def, true);
     count++;
   }
 
