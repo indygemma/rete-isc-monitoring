@@ -373,7 +373,13 @@ void iterate(int iteration_count, const json& bench_spec,
              const json& event_stream_def,
              const json& change_def,
              bool perform_change) {
-  // TODO: - collect stats for each run
+  // TODO: collect: number of  < tc activations this run
+  // TODO: collect: number of >= tc activations this run
+  // TODO: collect: the above two together
+  // TODO: collect: avg trigger time for  < tc
+  // TODO: collect: avg trigger time for >= tc
+  // TODO: collect: time to do versioning (for fact preserve, non fact preserve)
+  // TODO: collect: actual change impact during versioning + type of change (ADD CONTEXT, DELETE CONTEXT, ADD CONDITION etc.)
   // TODO: ensure that all actions are implemented in the json spec
 
   std::string filename = event_stream_def["filename"].get<std::string>();
@@ -413,6 +419,28 @@ void iterate(int iteration_count, const json& bench_spec,
   // load the new ISC for later changing, without adding to the rete structure for now
   rete::rule_instance_t new_rule_instance = load_rule(rs, change_def["ISC"], action_lookup_table, variable_lookup_table, false);
 
+  rete::shared_var_init_type_t old_init_type, new_init_type;
+
+  // save which old namespace init type to apply "old_namespace_init_type"
+  std::string old_init_type_str = change_def["old_namespace_init_type"].get<std::string>();
+  if (old_init_type_str == "COPY") {
+    old_init_type = rete::COPY;
+  } else if (old_init_type_str == "DEFAULT_VALUE") {
+    old_init_type = rete::DEFAULT_VALUE;
+  } else {
+    throw std::runtime_error("Unknown old_namespace_init_type value: " + old_init_type_str);
+  }
+
+  // save which new namespace init type to apply "new_namesppace_init_type"
+  std::string new_init_type_str = change_def["new_namespace_init_type"].get<std::string>();
+  if (new_init_type_str == "COPY") {
+    new_init_type = rete::COPY;
+  } else if (new_init_type_str == "DEFAULT_VALUE") {
+    new_init_type = rete::DEFAULT_VALUE;
+  } else {
+    throw std::runtime_error("Unknown new_namespace_init_type value: " + new_init_type_str);
+  }
+
   std::vector<single_event_map_t> event_mapping;
   for (json event_map : bench_spec["events"]) {
     event_mapping.push_back( load_single_event_map(event_map) );
@@ -440,8 +468,8 @@ void iterate(int iteration_count, const json& bench_spec,
 
     if (perform_change && timestamp >= PERFORM_CHANGE_AT && !CHANGED) {
       add_rule_version(rs, existing_rules, new_rule_instance.rule_definition, timestamp,
-                       rete::COPY, // shared variables are copied for old namespace
-                       rete::DEFAULT_VALUE, // shared variables are initialized for new namespace
+                       old_init_type, // shared variables are copied for old namespace
+                       new_init_type, // shared variables are initialized for new namespace
                        DO_PRESERVED_CHANGE);
 
       // rete::to_json_file(rs, std::string(std::to_string(iteration_count) + "_after_the_change.json").c_str());
