@@ -40,7 +40,7 @@ namespace rete {
         // check if id matches
         if (identifier_is_constant && strcmp(condition.identifier_as_val.name, id_name.c_str()) == 0) {
           id_matches = true;
-        } else if (strcmp(condition.identifier_as_var.name, id_name.c_str()) == 0) {
+        } else if (!identifier_is_constant && strcmp(condition.identifier_as_var.name, id_name.c_str()) == 0) {
           id_matches = true;
         }
 
@@ -51,7 +51,7 @@ namespace rete {
         // check if attr matches
         if (attribute_is_constant && strcmp(condition.attribute_as_val.name, attr_name.c_str()) == 0) {
           attr_matches = true;
-        } else if (strcmp(condition.attribute_as_var.name, attr_name.c_str()) == 0) {
+        } else if (!attribute_is_constant && strcmp(condition.attribute_as_var.name, attr_name.c_str()) == 0) {
           attr_matches = true;
         }
 
@@ -62,7 +62,7 @@ namespace rete {
         // check if value matches
         if (value_is_constant && condition.value_as_val == value) {
           value_matches = true;
-        } else if (strcmp(condition.value_as_var.name, value_var_name.c_str()) == 0) {
+        } else if (!value_is_constant && strcmp(condition.value_as_var.name, value_var_name.c_str()) == 0) {
           value_matches = true;
         }
 
