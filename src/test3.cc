@@ -208,23 +208,65 @@ rete::value_t load_value(json value, variable_lookup_table_t& variable_lookup_ta
   throw std::runtime_error("Unknown value type: " + value.dump(4));
 }
 
-std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
-                                              json bench_spec,
-                                              action_lookup_table_t& action_lookup_table,
-                                              variable_lookup_table_t& variable_lookup_table,
-                                              const std::string& attribute) {
-  std::vector<rete::rule_instance_t> result;
-  for (json ruledef : bench_spec[attribute].get<std::vector<json>>()) {
+struct single_event_map_t {
+  std::string type;
+  std::string state;
+  bool has_state;
+  json mapping;
+};
+
+bool single_event_map_t_matches(const single_event_map_t& event_map, const json& event) {
+  if (event_map.type == event["event"].get<std::string>()) {
+    if (!event_map.has_state) {
+      return true;
+    }
+    if (event_map.state == event["state"].get<std::string>()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void generate_facts_from_event(rete::rete_t* rs,
+                               single_event_map_t& event_map,
+                               json id,
+                               const json& event,
+                               variable_lookup_table_t& variable_lookup_table) {
+  for (json::iterator it = event_map.mapping.begin(); it != event_map.mapping.end(); it++) {
+    rete::value_t value = load_value(event[it.key()], variable_lookup_table);
+    rete::create_wme(rs, id.dump().c_str(), it.value().get<std::string>().c_str(), value);
+  }
+}
+
+single_event_map_t load_single_event_map(const json& event_map_def) {
+  single_event_map_t map;
+
+  map.type = event_map_def["type"].get<std::string>();
+  map.has_state = false;
+  if (event_map_def.count("state")) {
+    map.state = event_map_def["state"].get<std::string>();
+    map.has_state = true;
+  }
+  map.mapping = event_map_def["mapping"];
+  return map;
+}
+
+rete::rule_instance_t load_rule(rete::rete_t* rs,
+                                json obj,
+                                action_lookup_table_t& action_lookup_table,
+                                variable_lookup_table_t& variable_lookup_table,
+                                bool add_to_rete=true) {
     // printf("%s\n", ruledef.dump(4).c_str());
     rete::rule_t rule;
-    rule.name = ruledef["name"].get<std::string>().c_str();
-    rule.salience = ruledef["salience"].get<int>();
+    rule.name = obj["name"].get<std::string>().c_str();
+    rule.salience = obj["salience"].get<int>();
 
-    size_t size = ruledef["conditions"].size();
+    size_t size = obj["conditions"].size();
     printf("SIZE of conditions: %ld\n", size);
     rete::condition_t* conds = new rete::condition_t[size];
     uint32_t i = 0;
-    for (json cond : ruledef["conditions"].get<std::vector<json>>()) {
+    for (json cond : obj["conditions"].get<std::vector<json>>()) {
       rete::condition_t c;
 
       // create id part
@@ -296,16 +338,30 @@ std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
     rule.conditions = conds;
     rule.conditions_size = size;
 
-    if (ruledef.count("namespace") > 0) {
-      rule.extra_context = (void*)(ruledef["namespace"].get<std::string>().c_str());
+    if (obj.count("namespace") > 0) {
+      rule.extra_context = (void*)(obj["namespace"].get<std::string>().c_str());
     }
 
-    rule.action = action_lookup_table[ruledef["action"].get<std::string>()];
+    rule.action = action_lookup_table[obj["action"].get<std::string>()];
 
     rete::rule_instance_t rule_instance;
     rule_instance.rule_definition = rule;
-    rule_instance.production_node = rete::add_rule(rs, rule);
 
+    if (add_to_rete) {
+      rule_instance.production_node = rete::add_rule(rs, rule);
+    }
+
+    return rule_instance;
+}
+
+std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
+                                              json bench_spec,
+                                              action_lookup_table_t& action_lookup_table,
+                                              variable_lookup_table_t& variable_lookup_table,
+                                              const std::string& attribute) {
+  std::vector<rete::rule_instance_t> result;
+  for (json ruledef : bench_spec[attribute].get<std::vector<json>>()) {
+    rete::rule_instance_t rule_instance = load_rule(rs, ruledef, action_lookup_table, variable_lookup_table, true);
     result.push_back(rule_instance);
   }
 
@@ -315,11 +371,10 @@ std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
 void iterate(int iteration_count, const json& bench_spec,
              action_lookup_table_t& action_lookup_table,
              const json& event_stream_def,
+             const json& change_def,
              bool perform_change) {
-  // TODO: - setup event listeners
-  // TODO: - for each change ready:
-  // TODO:   - feed stream and once tc occurs, apply the change
   // TODO: - collect stats for each run
+  // TODO: ensure that all actions are implemented in the json spec
 
   std::string filename = event_stream_def["filename"].get<std::string>();
   std::vector<json> event_stream = load_event_stream(filename.c_str());
@@ -328,7 +383,7 @@ void iterate(int iteration_count, const json& bench_spec,
 
   printf("==== OPENING: %s -> %ld\n", filename.c_str(), event_stream.size());
 
-  // TODO: setup substitution variables
+  // setup substitution variables
   variable_lookup_table_t variable_lookup_table;
   json variables = event_stream_def["variables"];
   for (json::iterator it = variables.begin(); it != variables.end(); it++) {
@@ -340,8 +395,7 @@ void iterate(int iteration_count, const json& bench_spec,
   // parse the "meta_ISC" from benchmark JSON and setup all meta rules
   load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "meta_ISC");
 
-  // load the initial rules
-  // TODO: - initialize the original ISC for this event stream
+  // initialize the original ISC for this event stream
   std::vector<rete::rule_instance_t> existing_rules = load_rules(rs, bench_spec, action_lookup_table, variable_lookup_table, "ISC");
 
   std::vector<std::string> ended_instances;
@@ -352,37 +406,17 @@ void iterate(int iteration_count, const json& bench_spec,
   for (json shared_var : bench_spec["initial_shared_variables"].get<std::vector<json>>()) {
     std::string id_part = shared_var["id"].get<std::string>();
     std::string attr_part = shared_var["attribute"].get<std::string>();
-    // TODO: remove the assumption below
-    int value_part = shared_var["value"].get<int>();
-    rete::create_wme(rs, id_part.c_str(), attr_part.c_str(), rete::value_int(value_part));
+    rete::value_t value_part = load_value(shared_var["value"], variable_lookup_table);
+    rete::create_wme(rs, id_part.c_str(), attr_part.c_str(), value_part);
   }
 
-  // rete::create_wme(rs, "vars", "accumulated_values", rete::value_int(0));
+  // load the new ISC for later changing, without adding to the rete structure for now
+  rete::rule_instance_t new_rule_instance = load_rule(rs, change_def["ISC"], action_lookup_table, variable_lookup_table, false);
 
-  // ----
-  // NEW ISC
-  // ----
-  rete::rule_t r3;
-  r3.name = "new ISC - send alert threshold exceeded";
-  r3.salience = 0;
-
-  rete::condition_t conditions3[5] = {
-    rete::condition_t_vax(rete::var("id"), rete::attr("type"), rete::value_string("READ-OUT-METER")),
-    rete::condition_t_vavjv(rete::var("id"), rete::attr("timestamp"), rete::var("timestamp"), {
-        rete::join_test::const_join( rete::var("timestamp"), rete::join_test::greater_equal_than(), rete::value_int(1514764800) ),
-        //rete::join_test::const_join( rete::var("timestamp"), rete::join_test::less_equal_than(), rete::value_int(1514786400) )
-
-      }),
-    rete::condition_t_vav(rete::var("id"), rete::attr("readout"), rete::var("readout_value")),
-    rete::condition_t_vav(rete::var("id"), rete::attr("instance_start_time"), rete::var("ist")),
-    rete::condition_t_iav(rete::id("vars"), rete::attr("accumulated_values"), rete::var("acc_values")),
-
-
-  };
-
-  r3.conditions_size = 5;
-  r3.conditions = conditions3;
-  r3.action = alert_readout_threshold_action;
+  std::vector<single_event_map_t> event_mapping;
+  for (json event_map : bench_spec["events"]) {
+    event_mapping.push_back( load_single_event_map(event_map) );
+  }
 
   int count = 0;
   bool CHANGED = false;
@@ -390,29 +424,22 @@ void iterate(int iteration_count, const json& bench_spec,
     std::chrono::steady_clock::time_point tick_begin = std::chrono::steady_clock::now();
     std::string instance_id = event["instanceId"].get<std::string>();
     std::string event_name = event["event"].get<std::string>();
+    long timestamp = event["timestampUnix"].get<long>();
     json id;
     id["instance_id"] = instance_id;
     id["event"] = event_name;
-    long timestamp = event["timestampUnix"].get<long>();
-    //printf("instance_id %s, event_name %s, timestamp: %ld\n", instance_id.c_str(), event_name.c_str(), timestamp);
 
-    if (event_name == "START-EVENT" || event_name == "READ-OUT-METER" && event["state"].get<std::string>() == "running") {
-      if (DEBUG) printf("%d: %s\n", count, event.dump(4).c_str());
-
-      rete::create_wme(rs, id.dump().c_str(), "type", rete::value_string(event_name.c_str()));
-      rete::create_wme(rs, id.dump().c_str(), "timestamp", rete::value_int(timestamp));
-    }
-
-    if (event_name == "READ-OUT-METER" && event["state"].get<std::string>() == "running") {
-      // printf("%s\n", event.dump(4).c_str());
-      long value = event["readOutValue"].get<long>();
-      rete::create_wme(rs, id.dump().c_str(), "readout", rete::value_int(value));
-      // printf("\treadout value: %ld\n", value);
-      // rete::to_json_file(rs, "debug.json");
+    // implement dynamic event mapping according to spec
+    // TODO: improve this to be a unordered_map instead of linear vector
+    for (single_event_map_t& event_map : event_mapping) {
+      if (single_event_map_t_matches(event_map, event)) {
+        if (DEBUG) printf("%d: %s\n", count, event.dump(4).c_str());
+        generate_facts_from_event(rs, event_map, id, event, variable_lookup_table);
+      }
     }
 
     if (perform_change && timestamp >= PERFORM_CHANGE_AT && !CHANGED) {
-      add_rule_version(rs, existing_rules, r3, timestamp,
+      add_rule_version(rs, existing_rules, new_rule_instance.rule_definition, timestamp,
                        rete::COPY, // shared variables are copied for old namespace
                        rete::DEFAULT_VALUE, // shared variables are initialized for new namespace
                        DO_PRESERVED_CHANGE);
@@ -475,13 +502,15 @@ int main(int argc, char** argv) {
   action_lookup_table["readout_alert_threshold"] = alert_readout_threshold_action;
 
   int count = 0;
-  for (json event_stream_def : bench_spec["event_stream"].get<json>()) {
-    // TODO one for old only, no change
-    // TODO one for new only, no change
-    // TODO one for old+new, with change
-    // TODO: one for fact preserving change, one for non-preserving change
-    iterate(count, bench_spec, action_lookup_table, event_stream_def, true);
-    count++;
+  for (json event_stream_def : bench_spec["event_stream"]) {
+    for (json change_def : bench_spec["changes"]) {
+      // TODO one for old only, no change
+      // TODO one for new only, no change
+      // TODO one for old+new, with change
+      // TODO: one for fact preserving change, one for non-preserving change
+      iterate(count, bench_spec, action_lookup_table, event_stream_def, change_def, true);
+      count++;
+    }
   }
 
   return 0;
