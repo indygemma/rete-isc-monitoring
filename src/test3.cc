@@ -383,7 +383,8 @@ std::vector<rete::rule_instance_t> load_rules(rete::rete_t* rs,
   return result;
 }
 
-json iterate(const std::string& name, const std::string& category,
+json iterate(int n,
+             const std::string& name, const std::string& category,
              int iteration_count, const json& bench_spec,
              action_lookup_table_t& action_lookup_table,
              const json& event_stream_def,
@@ -395,18 +396,12 @@ json iterate(const std::string& name, const std::string& category,
   reset_stats();
 
   json log;
+  log["N"] = n;
   log["name"] = name;
   log["category"] = category;
   json old_instance_trigger_times = json::array();
   json new_instance_trigger_times = json::array();
 
-  // DONE collect: number of  < tc activations this run
-  // DONE collect: number of >= tc activations this run
-  // DONE collect: the above two together
-  // DONE collect: all trigger times for < tc
-  // DONE collect: all trigger times for >= tc
-  // DONE collect: time to do versioning (for fact preserve, non fact preserve)
-  // DONE collect: actual change impact during versioning + type of change (ADD CONTEXT, DELETE CONTEXT, ADD CONDITION etc.)
   // TODO: ensure that all actions are implemented in the json spec
 
   std::string filename = event_stream_def["filename"].get<std::string>();
@@ -414,7 +409,7 @@ json iterate(const std::string& name, const std::string& category,
 
   PERFORM_CHANGE_AT = event_stream_def["change_at"].get<long>();
 
-  printf("==== OPENING: %s -> %ld\n", filename.c_str(), event_stream.size());
+  // printf("==== OPENING: %s -> %ld\n", filename.c_str(), event_stream.size());
 
   // setup substitution variables
   variable_lookup_table_t variable_lookup_table;
@@ -616,7 +611,8 @@ int main(int argc, char** argv) {
   for (json event_stream_def : bench_spec["event_stream"]) {
     for (json change_def : bench_spec["changes"]) {
       // one for old only, no change
-      logs.push_back( iterate(change_def["name"].get<std::string>(),
+      logs.push_back( iterate(event_stream_def["N"].get<int>(),
+                              change_def["name"].get<std::string>(),
                               "old_only",
                               count, bench_spec, action_lookup_table,
                               event_stream_def, change_def,
@@ -627,7 +623,8 @@ int main(int argc, char** argv) {
                               )
                       );
       // one for new only, no change
-      logs.push_back( iterate(change_def["name"].get<std::string>(),
+      logs.push_back( iterate(event_stream_def["N"].get<int>(),
+                              change_def["name"].get<std::string>(),
                               "new_only",
                               count, bench_spec, action_lookup_table,
                               event_stream_def, change_def,
@@ -638,7 +635,8 @@ int main(int argc, char** argv) {
                               )
                       );
       // one for old+new, with fact preserving change
-      logs.push_back( iterate(change_def["name"].get<std::string>(),
+      logs.push_back( iterate(event_stream_def["N"].get<int>(),
+                              change_def["name"].get<std::string>(),
                               "old_new_fact_preserving_change",
                               count, bench_spec, action_lookup_table,
                               event_stream_def, change_def, true, true,
@@ -647,7 +645,8 @@ int main(int argc, char** argv) {
                               )
                       );
       // one for old+new, without fact preserving change
-      logs.push_back( iterate(change_def["name"].get<std::string>(),
+      logs.push_back( iterate(event_stream_def["N"].get<int>(),
+                              change_def["name"].get<std::string>(),
                               "old_new_no_fact_preserving_change",
                               count, bench_spec, action_lookup_table,
                               event_stream_def, change_def, true, false,

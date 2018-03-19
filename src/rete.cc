@@ -3204,27 +3204,29 @@ namespace rete {
       log["token_count"] = rs->token_count;
       log["wme_count"] = rs->wme_count;
 
-      if (runtime >= 0) {
-        log["runtime"] = runtime;
-        printf("%s alpha nodes: %d, beta nodes: %d, join nodes: %d, production nodes: %d, tokens: %d, wmes: %d, runtime: %ld\n",
-               header.c_str(),
-               rs->alpha_memory_count,
-               rs->beta_memory_count,
-               rs->join_nodes_count,
-               rs->production_nodes_count,
-               rs->token_count,
-               rs->wme_count,
-               runtime);
-      } else {
-        printf("%s alpha nodes: %d, beta nodes: %d, join nodes: %d, production nodes: %d, tokens: %d, wmes: %d\n",
-               header.c_str(),
-               rs->alpha_memory_count,
-               rs->beta_memory_count,
-               rs->join_nodes_count,
-               rs->production_nodes_count,
-               rs->token_count,
-               rs->wme_count
-               );
+      if (DEBUG) {
+        if (runtime >= 0) {
+          log["runtime"] = runtime;
+          printf("%s alpha nodes: %d, beta nodes: %d, join nodes: %d, production nodes: %d, tokens: %d, wmes: %d, runtime: %ld\n",
+                 header.c_str(),
+                 rs->alpha_memory_count,
+                 rs->beta_memory_count,
+                 rs->join_nodes_count,
+                 rs->production_nodes_count,
+                 rs->token_count,
+                 rs->wme_count,
+                 runtime);
+        } else {
+          printf("%s alpha nodes: %d, beta nodes: %d, join nodes: %d, production nodes: %d, tokens: %d, wmes: %d\n",
+                 header.c_str(),
+                 rs->alpha_memory_count,
+                 rs->beta_memory_count,
+                 rs->join_nodes_count,
+                 rs->production_nodes_count,
+                 rs->token_count,
+                 rs->wme_count
+                 );
+        }
       }
     }
 }
